@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "560625147096",
+    "project_id": "mess-app-yajan",
+    "storage_bucket": "mess-app-yajan.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:560625147096:android:19dfe6368311d95f1f8bad",
+        "android_client_info": {
+          "package_name": "com.example.mess_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBn1lXjDUfx87fXk0xCY5COp7XB_52Jo8E"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
