@@ -2,7 +2,6 @@ plugins {
     id("com.android.application")
     id("kotlin-android")
     id("dev.flutter.flutter-gradle-plugin")
-    id("com.google.gms.google-services")
 }
 
 android {
@@ -11,13 +10,14 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
+    jvmTarget = JavaVersion.VERSION_17.toString()
     }
+
 
     defaultConfig {
         applicationId = "com.example.mess_app"
@@ -35,8 +35,9 @@ android {
 }
 
 dependencies {
-    implementation(platform("com.google.firebase:firebase-bom:34.11.0"))
-    implementation("com.google.firebase:firebase-analytics")
+    debugImplementation("io.flutter:flutter_embedding_debug:1.0.0-425cfb54d01a9472b3e81d9e76fd63a4a44cfbcb")
+    profileImplementation("io.flutter:flutter_embedding_profile:1.0.0-425cfb54d01a9472b3e81d9e76fd63a4a44cfbcb")
+    releaseImplementation("io.flutter:flutter_embedding_release:1.0.0-425cfb54d01a9472b3e81d9e76fd63a4a44cfbcb")
 }
 
 flutter {
