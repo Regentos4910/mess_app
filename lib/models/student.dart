@@ -9,6 +9,8 @@ class Student {
     required this.division,
     required this.membershipActive,
     required this.photoPath,
+    required this.photoUrl,
+    required this.syncedToCloud,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -22,8 +24,14 @@ class Student {
   final String division;
   final bool membershipActive;
   final String photoPath;
+  final String photoUrl;
+  final bool syncedToCloud;
   final DateTime createdAt;
   final DateTime updatedAt;
+
+  bool get hasLocalPhoto => photoPath.isNotEmpty;
+  bool get hasRemotePhoto => photoUrl.isNotEmpty;
+  bool get hasAnyPhoto => hasLocalPhoto || hasRemotePhoto;
 
   String get subtitle => '$courseName • Year $studyYear • Div $division';
 
@@ -37,6 +45,8 @@ class Student {
     String? division,
     bool? membershipActive,
     String? photoPath,
+    String? photoUrl,
+    bool? syncedToCloud,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -50,6 +60,8 @@ class Student {
       division: division ?? this.division,
       membershipActive: membershipActive ?? this.membershipActive,
       photoPath: photoPath ?? this.photoPath,
+      photoUrl: photoUrl ?? this.photoUrl,
+      syncedToCloud: syncedToCloud ?? this.syncedToCloud,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -66,6 +78,8 @@ class Student {
       'division': division,
       'membershipActive': membershipActive,
       'photoPath': photoPath,
+      'photoUrl': photoUrl,
+      'syncedToCloud': syncedToCloud,
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
     };
@@ -82,6 +96,8 @@ class Student {
       division: map['division'] as String,
       membershipActive: map['membershipActive'] as bool? ?? true,
       photoPath: map['photoPath'] as String? ?? '',
+      photoUrl: map['photoUrl'] as String? ?? '',
+      syncedToCloud: map['syncedToCloud'] as bool? ?? false,
       createdAt: DateTime.parse(map['createdAt'] as String),
       updatedAt: DateTime.parse(map['updatedAt'] as String),
     );

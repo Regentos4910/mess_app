@@ -66,7 +66,7 @@ class AppController extends ChangeNotifier {
     AttendanceService? attendanceService,
     LocalStorageService? localStorageService,
     bool enableConnectivityMonitoring = true,
-  })  : _firebaseService = firebaseService ?? const FirebaseService(),
+  })  : _firebaseService = firebaseService ?? FirebaseService(),
         _studentService = studentService ?? const StudentService(),
         _attendanceService = attendanceService ?? const AttendanceService(),
         _localStorageService =
@@ -90,7 +90,7 @@ class AppController extends ChangeNotifier {
   bool _isOnline = false;
   MealType _selectedMeal = MealType.lunch;
   DateTime? _lastSyncAttempt;
-  String _syncStatus = 'Local-only mode. Firebase sync will be enabled later.';
+  String _syncStatus = 'Preparing local cache and Firebase backend.';
 
   List<Student> get students => _studentService.sortStudents(_students);
   List<AttendanceLog> get attendanceLogs {
@@ -114,6 +114,18 @@ class AppController extends ChangeNotifier {
 
     await _restoreState();
     await _primeConnectivity();
+    await _firebaseService.initialize();
+    _syncStatus = _firebaseService.statusMessage;
+    if (_firebaseService.backendConfigured) {
+      await _mergeRemoteState();
+      if (_isOnline) {
+        await syncPendingData();
+        await _mergeRemoteState();
+      }
+    } else if (_students.isEmpty) {
+      _seedDemoData();
+      await _persistState();
+    }
     _initialized = true;
     notifyListeners();
   }
@@ -123,12 +135,6 @@ class AppController extends ChangeNotifier {
     final List<dynamic> studentMaps = state['students'] as List<dynamic>? ?? <dynamic>[];
     final List<dynamic> attendanceMaps =
         state['attendanceLogs'] as List<dynamic>? ?? <dynamic>[];
-
-    if (studentMaps.isEmpty) {
-      _seedDemoData();
-      await _persistState();
-      return;
-    }
 
     _students
       ..clear()
@@ -183,17 +189,17 @@ class AppController extends ChangeNotifier {
           }
           _isOnline = nextOnline;
           _syncStatus = _isOnline
-              ? 'Connection detected. Pending records are ready to sync.'
-              : 'Offline mode. Attendance is being queued on the device.';
+              ? 'Connection detected. Firestore sync is available.'
+              : 'Offline mode. Local cache and pending sync remain active.';
           notifyListeners();
-          if (_isOnline) {
+          if (_isOnline && _firebaseService.backendConfigured) {
             unawaited(syncPendingData());
           }
         },
       );
     } catch (_) {
       _isOnline = false;
-      _syncStatus = 'Connectivity plugin unavailable. Running in local-only mode.';
+      _syncStatus = 'Connectivity plugin unavailable. Running with cached data only.';
     }
   }
 
@@ -232,6 +238,8 @@ class AppController extends ChangeNotifier {
       division: draft.division.trim(),
       membershipActive: draft.membershipActive,
       photoPath: storedPhotoPath,
+      photoUrl: '',
+      syncedToCloud: false,
       createdAt: now,
       updatedAt: now,
     );
@@ -239,6 +247,9 @@ class AppController extends ChangeNotifier {
     _students.removeWhere((Student item) => item.id == student.id);
     _students.add(student);
     await _persistState();
+    if (_firebaseService.backendConfigured && _isOnline) {
+      await syncPendingData();
+    }
     _busy = false;
     notifyListeners();
     return student;
@@ -255,9 +266,13 @@ class AppController extends ChangeNotifier {
 
     _students[index] = _students[index].copyWith(
       membershipActive: active,
+      syncedToCloud: false,
       updatedAt: DateTime.now(),
     );
     await _persistState();
+    if (_firebaseService.backendConfigured && _isOnline) {
+      await syncPendingData();
+    }
     notifyListeners();
   }
 
@@ -271,11 +286,15 @@ class AppController extends ChangeNotifier {
       if (index != -1) {
         _students[index] = _students[index].copyWith(
           membershipActive: active,
+          syncedToCloud: false,
           updatedAt: DateTime.now(),
         );
       }
     }
     await _persistState();
+    if (_firebaseService.backendConfigured && _isOnline) {
+      await syncPendingData();
+    }
     notifyListeners();
   }
 
@@ -382,37 +401,114 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> syncPendingData() async {
+    if (!_firebaseService.backendConfigured) {
+      _syncStatus = _firebaseService.statusMessage;
+      await _persistState();
+      notifyListeners();
+      return;
+    }
+
+    final List<Student> pendingStudents = _students
+        .where((Student student) => !student.syncedToCloud)
+        .toList();
     final List<AttendanceLog> pendingLogs = _attendanceLogs
         .where((AttendanceLog log) => !log.syncedToCloud)
         .toList();
     _lastSyncAttempt = DateTime.now();
 
-    if (pendingLogs.isEmpty) {
-      _syncStatus = 'No pending attendance to sync.';
+    if (pendingStudents.isEmpty && pendingLogs.isEmpty) {
+      _syncStatus = 'Cloud state is up to date.';
       await _persistState();
       notifyListeners();
       return;
     }
 
     final SyncResult result = await _firebaseService.syncPendingAttendance(
+      pendingStudents: pendingStudents,
       pendingLogs: pendingLogs,
-      students: _students,
     );
 
-    if (result.success) {
-      for (final String logId in result.syncedLogIds) {
-        final int index =
-            _attendanceLogs.indexWhere((AttendanceLog log) => log.id == logId);
-        if (index != -1) {
-          _attendanceLogs[index] =
-              _attendanceLogs[index].copyWith(syncedToCloud: true);
-        }
+    for (final StudentSyncUpdate update in result.studentUpdates) {
+      final int index =
+          _students.indexWhere((Student student) => student.id == update.studentId);
+      if (index != -1) {
+        _students[index] = _students[index].copyWith(
+          photoUrl: update.photoUrl,
+          syncedToCloud: update.synced,
+        );
+      }
+    }
+
+    for (final AttendanceSyncUpdate update in result.attendanceUpdates) {
+      final int index =
+          _attendanceLogs.indexWhere((AttendanceLog log) => log.id == update.logId);
+      if (index != -1) {
+        _attendanceLogs[index] = _attendanceLogs[index].copyWith(
+          syncedToCloud: update.synced,
+          decision: update.correctedDecision,
+          reason: update.correctedReason,
+        );
       }
     }
 
     _syncStatus = result.message;
     await _persistState();
     notifyListeners();
+  }
+
+  Future<void> _mergeRemoteState() async {
+    try {
+      final List<Student> remoteStudents = await _firebaseService.fetchStudents();
+      final List<AttendanceLog> remoteLogs =
+          await _firebaseService.fetchAttendanceLogs();
+
+      final Map<String, Student> mergedStudents = <String, Student>{
+        for (final Student student in _students) student.id: student,
+      };
+      for (final Student remote in remoteStudents) {
+        final Student? local = mergedStudents[remote.id];
+        if (local == null || remote.updatedAt.isAfter(local.updatedAt)) {
+          mergedStudents[remote.id] = remote;
+        }
+      }
+
+      final Map<String, AttendanceLog> mergedLogs = <String, AttendanceLog>{
+        for (final AttendanceLog log in _attendanceLogs) log.id: log,
+      };
+      for (final AttendanceLog remote in remoteLogs) {
+        final AttendanceLog? local = mergedLogs[remote.id];
+        if (local == null || remote.syncedToCloud || remote.timestamp.isAfter(local.timestamp)) {
+          mergedLogs[remote.id] = remote;
+        }
+      }
+
+      _students
+        ..clear()
+        ..addAll(mergedStudents.values);
+      _attendanceLogs
+        ..clear()
+        ..addAll(mergedLogs.values);
+      _rebuildDuplicateKeys();
+      await _persistState();
+    } catch (_) {
+      _syncStatus =
+          'Firebase is configured, but the database could not be read yet. Local cache remains active.';
+    }
+  }
+
+  void _rebuildDuplicateKeys() {
+    _duplicateKeys.clear();
+    for (final AttendanceLog log in _attendanceLogs) {
+      if (log.decision == AttendanceDecision.allowed) {
+        _duplicateKeys.add(
+          _attendanceService.buildDuplicateKey(
+            studentId: log.studentId,
+            mealType: log.mealType,
+            timestamp: log.timestamp,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _persistState() async {
@@ -454,6 +550,8 @@ class AppController extends ChangeNotifier {
             division: 'A',
             membershipActive: true,
             photoPath: '',
+            photoUrl: '',
+            syncedToCloud: false,
             createdAt: now,
             updatedAt: now,
           ),
@@ -467,6 +565,8 @@ class AppController extends ChangeNotifier {
             division: 'B',
             membershipActive: false,
             photoPath: '',
+            photoUrl: '',
+            syncedToCloud: false,
             createdAt: now,
             updatedAt: now,
           ),

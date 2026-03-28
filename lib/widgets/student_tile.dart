@@ -23,6 +23,7 @@ class StudentTile extends StatelessWidget {
     final ThemeData theme = Theme.of(context);
     final Color badgeColor =
         student.membershipActive ? const Color(0xFF15803D) : const Color(0xFFB91C1C);
+    final ImageProvider<Object>? avatarImage = _avatarImage(student);
 
     return Card(
       elevation: 0,
@@ -34,9 +35,8 @@ class StudentTile extends StatelessWidget {
         leading: CircleAvatar(
           radius: 28,
           backgroundColor: const Color(0xFFCCFBF1),
-          backgroundImage:
-              student.photoPath.isNotEmpty ? FileImage(File(student.photoPath)) : null,
-          child: student.photoPath.isEmpty
+          backgroundImage: avatarImage,
+          child: avatarImage == null
               ? Text(
                   student.name.isEmpty ? '?' : student.name[0].toUpperCase(),
                   style: theme.textTheme.titleLarge?.copyWith(
@@ -77,6 +77,16 @@ class StudentTile extends StatelessWidget {
         trailing: trailing,
       ),
     );
+  }
+
+  ImageProvider<Object>? _avatarImage(Student student) {
+    if (student.photoPath.isNotEmpty) {
+      return FileImage(File(student.photoPath));
+    }
+    if (student.photoUrl.isNotEmpty) {
+      return NetworkImage(student.photoUrl);
+    }
+    return null;
   }
 }
 

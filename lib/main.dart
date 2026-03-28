@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 import 'screens/add_student_screen.dart';
 import 'screens/attendance_history_screen.dart';
@@ -12,6 +13,9 @@ import 'services/app_controller.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (Firebase.apps.isEmpty) {
+    await Firebase.initializeApp();
+  }
   final AppController controller = AppController();
   await controller.initialize();
   runApp(MyApp(controller: controller));

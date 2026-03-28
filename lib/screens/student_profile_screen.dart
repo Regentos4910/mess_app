@@ -31,6 +31,7 @@ class StudentProfileScreen extends StatelessWidget {
         }
 
         final List<AttendanceLog> logs = controller.logsForStudent(student.id);
+        final ImageProvider<Object>? avatarImage = _avatarImage(student);
 
         return Scaffold(
           appBar: AppBar(title: const Text('Student Profile')),
@@ -45,10 +46,8 @@ class StudentProfileScreen extends StatelessWidget {
                       CircleAvatar(
                         radius: 52,
                         backgroundColor: const Color(0xFFCCFBF1),
-                        backgroundImage: student.photoPath.isNotEmpty
-                            ? FileImage(File(student.photoPath))
-                            : null,
-                        child: student.photoPath.isEmpty
+                        backgroundImage: avatarImage,
+                        child: avatarImage == null
                             ? Text(
                                 student.name[0].toUpperCase(),
                                 style: Theme.of(context)
@@ -148,5 +147,15 @@ class StudentProfileScreen extends StatelessWidget {
         );
       },
     );
+  }
+
+  ImageProvider<Object>? _avatarImage(Student student) {
+    if (student.photoPath.isNotEmpty) {
+      return FileImage(File(student.photoPath));
+    }
+    if (student.photoUrl.isNotEmpty) {
+      return NetworkImage(student.photoUrl);
+    }
+    return null;
   }
 }

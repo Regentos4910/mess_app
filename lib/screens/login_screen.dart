@@ -47,7 +47,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 12),
               const Text(
-                'Authentication is local for now so you can test on Android before backend setup.',
+                'Authentication is still local, but Firebase sync is now wired for students, attendance, and photos.',
               ),
               const SizedBox(height: 28),
               TextField(
