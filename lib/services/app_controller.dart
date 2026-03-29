@@ -209,6 +209,11 @@ class AppController extends ChangeNotifier {
   }
 
   Future<Student> addStudent(StudentDraft draft) async {
+    
+    if (_students.any((s) => s.prn == draft.prn.trim() && !s.deleted)) {
+      throw Exception('A student with this PRN already exists.');
+    }
+
     _busy = true;
     notifyListeners();
 
@@ -453,95 +458,109 @@ class AppController extends ChangeNotifier {
   }
 
 Future<void> _mergeRemoteState() async {
-  try {
-    final List<Student> remoteStudents = await _firebaseService.fetchStudents();
-    final List<AttendanceLog> remoteLogs = await _firebaseService.fetchAttendanceLogs();
+    try {
+      final List<Student> remoteStudents = await _firebaseService.fetchStudents();
+      final List<AttendanceLog> remoteLogs = await _firebaseService.fetchAttendanceLogs();
 
-    // --- NEW LOGIC: Cross-Device Deletion Sync ---
-    // If a student exists locally and was previously synced, but is missing from
-    // the remote list, it means they were deleted from another device.
-    final Set<String> remoteIds = remoteStudents.map((s) => s.id).toSet();
-    
-    // 1. Identify students to remove locally
-    final List<Student> toDeleteLocally = _students.where((local) => 
-        local.syncedToCloud && !remoteIds.contains(local.id)).toList();
+      // --- PRODUCTION SYNC: CROSS-DEVICE DELETION ---
+      final Set<String> remoteIds = remoteStudents.map((s) => s.id).toSet();
+      
+      // Identify students that exist locally but are GONE from the Cloud
+      // We only delete them locally if they were previously synced (syncedToCloud == true)
+      final List<Student> deletedOnOtherDevice = _students.where((local) => 
+          local.syncedToCloud && !remoteIds.contains(local.id)).toList();
 
-    for (var student in toDeleteLocally) {
-      // Clean up their photo from disk
-      if (student.photoPath.isNotEmpty) {
-        final file = File(student.photoPath);
-        if (await file.exists()) await file.delete();
+      for (var student in deletedOnOtherDevice) {
+        if (student.photoPath.isNotEmpty) {
+          final file = File(student.photoPath);
+          if (await file.exists()) await file.delete();
+        }
+        _students.removeWhere((s) => s.id == student.id);
       }
-      _students.removeWhere((s) => s.id == student.id);
-    }
 
-    // 2. Remove local logs for non-existent students
-    _attendanceLogs.removeWhere((log) => 
-        log.syncedToCloud && !remoteIds.contains(log.studentId));
-    // ----------------------------------------------
+      // Cleanup logs for students no longer in the system
+      _attendanceLogs.removeWhere((log) => 
+          log.syncedToCloud && !remoteIds.contains(log.studentId));
 
-    final Map<String, Student> mergedStudents = <String, Student>{
-      for (final Student student in _students) student.id: student,
-    };
+      final Map<String, Student> mergedStudents = {
+        for (final Student student in _students) 
+          if (!student.syncedToCloud || remoteIds.contains(student.id)) student.id: student,
+      };
 
-    for (final Student remote in remoteStudents) {
-      final Student? local = mergedStudents[remote.id];
-      Student studentToProcess = remote;
+      // --- PHOTO SYNC WITH PERMANENT PATHS ---
+      final Directory root = await _localStorageService.appDirectory();
+      final String photosDirPath = '${root.path}/photos';
+      await Directory(photosDirPath).create(recursive: true);
 
-      if (remote.photoUrl.isNotEmpty) {
-        final String localDir = '${Directory.systemTemp.path}/mess_app_local/photos';
-        await Directory(localDir).create(recursive: true);
-        final String localPath = '$localDir/${remote.id}.jpg';
-        final File localFile = File(localPath);
+      for (final Student remote in remoteStudents) {
+        final Student? local = mergedStudents[remote.id];
+        Student studentToProcess = remote;
 
-        if (!localFile.existsSync()) {
-          try {
-            await _firebaseService.downloadStudentPhoto(remote.photoUrl, localPath);
+        if (remote.photoUrl.isNotEmpty) {
+          final String localPath = '$photosDirPath/${remote.id}.jpg';
+          final File localFile = File(localPath);
+
+          // Download only if missing
+          if (!localFile.existsSync()) {
+            try {
+              await _firebaseService.downloadStudentPhoto(remote.photoUrl, localPath);
+              studentToProcess = remote.copyWith(photoPath: localPath);
+            } catch (e) {
+              debugPrint('Photo sync failed for ${remote.name}: $e');
+              // Crucial: Fallback to the remote object without the local path 
+              // so the record is still updated even if the photo fails.
+              studentToProcess = remote; 
+            }
+          } else {
             studentToProcess = remote.copyWith(photoPath: localPath);
-          } catch (e) {
-            debugPrint('Failed to download photo for ${remote.name}: $e');
           }
-        } else {
-          studentToProcess = remote.copyWith(photoPath: localPath);
+        }
+
+        // Logic: Remote wins if it's newer than local
+        if (local == null || remote.updatedAt.isAfter(local.updatedAt)) {
+          mergedStudents[remote.id] = studentToProcess;
         }
       }
 
-      if (local == null || remote.updatedAt.isAfter(local.updatedAt)) {
-        mergedStudents[remote.id] = studentToProcess;
+      // Standard Log Merge
+      final Map<String, AttendanceLog> mergedLogs = {
+        for (final AttendanceLog log in _attendanceLogs) log.id: log,
+      };
+      for (final AttendanceLog remote in remoteLogs) {
+        final AttendanceLog? local = mergedLogs[remote.id];
+        if (local == null || remote.timestamp.isAfter(local.timestamp)) {
+          mergedLogs[remote.id] = remote;
+        }
       }
+
+      _students..clear()..addAll(mergedStudents.values);
+      _attendanceLogs..clear()..addAll(mergedLogs.values);
+      
+      _rebuildDuplicateKeys();
+      await _persistState();
+    } catch (e) {
+      _syncStatus = 'Auto-sync failed: $e';
     }
-
-    final Map<String, AttendanceLog> mergedLogs = <String, AttendanceLog>{
-      for (final AttendanceLog log in _attendanceLogs) log.id: log,
-    };
-
-    for (final AttendanceLog remote in remoteLogs) {
-      final AttendanceLog? local = mergedLogs[remote.id];
-      if (local == null || remote.syncedToCloud || remote.timestamp.isAfter(local.timestamp)) {
-        mergedLogs[remote.id] = remote;
-      }
-    }
-
-    _students..clear()..addAll(mergedStudents.values);
-    _attendanceLogs..clear()..addAll(mergedLogs.values);
-
-    _rebuildDuplicateKeys();
-    await _persistState();
-  } catch (e) {
-    _syncStatus = 'Firebase read error: $e';
   }
-}
 
   void _rebuildDuplicateKeys() {
-  _duplicateKeys.clear();
-  final String today = _attendanceService.buildDayKey(DateTime.now());
-  for (final AttendanceLog log in _attendanceLogs) {
-    // Only track duplicates for today's meals
-    if (log.decision == AttendanceDecision.allowed && log.dayKey == today) {
-      _duplicateKeys.add('${log.studentId}_${log.mealType.name}_$today');
+    _duplicateKeys.clear();
+    final DateTime now = DateTime.now();
+    // Only track duplicates for the current date to save memory
+    final String today = _attendanceService.buildDayKey(now);
+    
+    for (final AttendanceLog log in _attendanceLogs) {
+      if (log.decision == AttendanceDecision.allowed && log.dayKey == today) {
+        // Use the service to build the key to ensure consistent formatting
+        final key = _attendanceService.buildDuplicateKey(
+          studentId: log.studentId,
+          mealType: log.mealType,
+          timestamp: log.timestamp,
+        );
+        _duplicateKeys.add(key);
+      }
     }
   }
-}
 
   Future<void> _persistState() async {
     await _localStorageService.writeState(
