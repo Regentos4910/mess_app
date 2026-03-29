@@ -63,7 +63,6 @@ class _ScanScreenState extends State<ScanScreen> {
       extendBodyBehindAppBar: true,
       body: Stack(
         children: <Widget>[
-          // 1. Full-screen Camera
           MobileScanner(
             controller: _scannerController,
             onDetect: (BarcodeCapture capture) {
@@ -75,11 +74,7 @@ class _ScanScreenState extends State<ScanScreen> {
               }
             },
           ),
-
-          // 2. Minimalist Frosted Overlay
           _buildElegantOverlay(context),
-
-          // 3. Floating Control Panel
           Positioned(
             left: 20,
             right: 20,
@@ -119,7 +114,6 @@ class _ScanScreenState extends State<ScanScreen> {
             ],
           ),
         ),
-        // Vibrant Corner Frame
         Align(
           alignment: Alignment.center,
           child: Container(
@@ -213,6 +207,7 @@ class _ScanScreenState extends State<ScanScreen> {
       context: context,
       isDismissible: false,
       enableDrag: false,
+      isScrollControlled: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(40))),
       builder: (context) => _buildDecisionSheet(outcome),
@@ -242,90 +237,103 @@ class _ScanScreenState extends State<ScanScreen> {
   Widget _buildDecisionSheet(ScanOutcome outcome) {
     final student = outcome.student;
     final isAllowed = outcome.recommendedDecision == AttendanceDecision.allowed;
+    final size = MediaQuery.of(context).size;
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 32, 24, 40),
+    return Container(
+      constraints: BoxConstraints(maxHeight: size.height * 0.9),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 75,
-                height: 75,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(25),
-                  color: Colors.grey.shade100,
-                  image: student.photoPath.isNotEmpty && File(student.photoPath).existsSync()
-                      ? DecorationImage(image: FileImage(File(student.photoPath)), fit: BoxFit.cover)
-                      : null,
-                ),
-                child: student.photoPath.isEmpty 
-                    ? const Icon(Icons.person_rounded, size: 30, color: Colors.blueAccent) 
-                    : null,
+          // 1. DYNAMIC ASPECT RATIO PHOTO
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: 200,
+              maxHeight: size.height * 0.5, // Limit to 50% of screen height
+            ),
+            child: Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(40)),
+                color: Colors.grey.shade50, // Soft background if image is narrow
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              child: ClipRRect(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(40)),
+                child: student.photoPath.isNotEmpty && File(student.photoPath).existsSync()
+                    ? Image.file(
+                        File(student.photoPath),
+                        fit: BoxFit.contain, // Respects original aspect ratio
+                      )
+                    : const Center(
+                        child: Icon(Icons.person_rounded, size: 120, color: Colors.blueAccent),
+                      ),
+              ),
+            ),
+          ),
+          
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 20, 24, 40),
+            child: Column(
+              children: [
+                Text(student.name, 
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: Colors.black)),
+                const SizedBox(height: 4),
+                Text('PRN: ${student.prn}', 
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 16, fontWeight: FontWeight.bold)),
+                
+                const SizedBox(height: 24),
+                
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: isAllowed ? Colors.greenAccent.withOpacity(0.1) : Colors.redAccent.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: isAllowed ? Colors.greenAccent.withOpacity(0.3) : Colors.redAccent.withOpacity(0.2)),
+                  ),
+                  child: Text(
+                    outcome.reason,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: isAllowed ? Colors.green.shade800 : Colors.redAccent, 
+                      fontWeight: FontWeight.w900,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+                
+                const SizedBox(height: 32),
+                
+                Row(
                   children: [
-                    Text(student.name, 
-                        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.black)),
-                    const SizedBox(height: 2),
-                    Text('PRN: ${student.prn}', 
-                        style: TextStyle(color: Colors.grey.shade600, fontSize: 14, fontWeight: FontWeight.bold)),
+                    Expanded(
+                      child: TextButton(
+                        onPressed: () => Navigator.pop(context, AttendanceDecision.denied),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 20),
+                          foregroundColor: Colors.redAccent,
+                        ),
+                        child: const Text('DENY ENTRY', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: isAllowed ? () => Navigator.pop(context, AttendanceDecision.allowed) : null,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blueAccent,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 20),
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                        ),
+                        child: const Text('ALLOW', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15, letterSpacing: 1)),
+                      ),
+                    ),
                   ],
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-            decoration: BoxDecoration(
-              color: isAllowed ? Colors.greenAccent.withOpacity(0.1) : Colors.redAccent.withOpacity(0.05),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: isAllowed ? Colors.greenAccent.withOpacity(0.3) : Colors.redAccent.withOpacity(0.2)),
+              ],
             ),
-            child: Text(
-              outcome.reason,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: isAllowed ? Colors.green.shade800 : Colors.redAccent, 
-                fontWeight: FontWeight.w800,
-                fontSize: 13,
-              ),
-            ),
-          ),
-          const SizedBox(height: 32),
-          Row(
-            children: [
-              Expanded(
-                child: TextButton(
-                  onPressed: () => Navigator.pop(context, AttendanceDecision.denied),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 18),
-                    foregroundColor: Colors.redAccent,
-                  ),
-                  child: const Text('DENY ENTRY', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 0.5)),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: isAllowed ? () => Navigator.pop(context, AttendanceDecision.allowed) : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blueAccent,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 18),
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-                  ),
-                  child: const Text('ALLOW', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1)),
-                ),
-              ),
-            ],
           ),
         ],
       ),
