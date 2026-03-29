@@ -4,6 +4,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart';
+
+import 'package:image/image.dart' as img;
+import 'package:http/http.dart' as http; // to download files from URLs
 
 import '../models/attendance.dart';
 import '../models/student.dart';
@@ -60,6 +64,7 @@ class FirebaseService {
   FirebaseFirestore? _firestore;
   FirebaseStorage? _storage;
   FirebaseAuth? _auth;
+  User? get currentUser => _auth?.currentUser;
 
   bool _backendConfigured = false;
   String _statusMessage =
@@ -67,6 +72,70 @@ class FirebaseService {
 
   bool get backendConfigured => _backendConfigured;
   String get statusMessage => _statusMessage;
+
+  Future<StudentSyncUpdate> upsertStudent(Student student) async {
+    String photoUrl = student.photoUrl;
+    
+    if (photoUrl.isEmpty && student.photoPath.isNotEmpty) {
+      final File file = File(student.photoPath);
+      if (await file.exists()) {
+        // --- COMPRESSION LOGIC START ---
+        final bytes = await file.readAsBytes();
+        img.Image? image = img.decodeImage(bytes);
+        if (image != null) {
+          // Resize to 400px width (maintaining aspect ratio) for thumbnails
+          img.Image resized = img.copyResize(image, width: 400);
+          // Compress to 70% quality JPG
+          final compressedBytes = Uint8List.fromList(img.encodeJpg(resized, quality: 70));
+          
+          final Reference ref = _storage!.ref().child('students/photos/${student.id}.jpg');
+          await ref.putData(compressedBytes, SettableMetadata(contentType: 'image/jpeg'));
+          photoUrl = await ref.getDownloadURL();
+        }
+        // --- COMPRESSION LOGIC END ---
+      }
+    }
+
+    await _firestore!.collection('students').doc(student.id).set(
+      <String, dynamic>{
+        'id': student.id,
+        'qrPayload': student.qrPayload,
+        'name': student.name,
+        'prn': student.prn,
+        'membershipActive': student.membershipActive,
+        'photoUrl': photoUrl,
+        'createdAt': Timestamp.fromDate(student.createdAt),
+        'updatedAt': Timestamp.fromDate(student.updatedAt),
+      },
+      SetOptions(merge: true),
+    );
+
+    return StudentSyncUpdate(
+      studentId: student.id,
+      photoUrl: photoUrl,
+      synced: true,
+    );
+  }
+
+  Future<UserCredential?> signIn(String email, String password) async {
+  try {
+    return await _auth!.signInWithEmailAndPassword(
+      email: email.trim(),
+      password: password.trim(),
+    );
+  } catch (e) {
+    rethrow; // Let the UI handle the specific error message
+  }
+}
+
+Future<void> signOut() async {
+    try {
+      await _auth?.signOut();
+    } catch (e) {
+      debugPrint('Error during sign out: $e');
+      rethrow;
+    }
+  }
 
   Future<void> initialize() async {
     try {
@@ -76,19 +145,23 @@ class FirebaseService {
       _firestore ??= FirebaseFirestore.instance;
       _storage ??= FirebaseStorage.instance;
       _auth ??= FirebaseAuth.instance;
+      
       _firestore!.settings = const Settings(
         persistenceEnabled: true,
         cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
       );
-      if (_auth!.currentUser == null) {
-        try {
-          await _auth!.signInAnonymously();
-        } catch (_) {
-          // Anonymous auth may be disabled. Firestore can still be used if rules allow it.
-        }
+
+      // --- UPDATED LOGIC ---
+      // We removed the auto-anonymous login. 
+      // The app will now wait for the user to use the LoginScreen.
+      
+      if (_auth!.currentUser != null) {
+        _backendConfigured = true;
+        _statusMessage = 'Firebase connected as ${_auth!.currentUser?.email}';
+      } else {
+        _backendConfigured = true; // Firestore is ready, just waiting for auth
+        _statusMessage = 'Firebase ready. Please sign in.';
       }
-      _backendConfigured = true;
-      _statusMessage = 'Firebase connected. Firestore offline cache is active.';
     } catch (error) {
       _backendConfigured = false;
       _statusMessage = 'Firebase unavailable. Falling back to local storage. $error';
@@ -154,41 +227,7 @@ class FirebaseService {
     );
   }
 
-  Future<StudentSyncUpdate> upsertStudent(Student student) async {
-    String photoUrl = student.photoUrl;
-    if (photoUrl.isEmpty && student.photoPath.isNotEmpty) {
-      final File file = File(student.photoPath);
-      if (await file.exists()) {
-        final Reference ref =
-            _storage!.ref().child('students/photos/${student.id}.jpg');
-        await ref.putFile(file);
-        photoUrl = await ref.getDownloadURL();
-      }
-    }
 
-    await _firestore!.collection('students').doc(student.id).set(
-      <String, dynamic>{
-        'id': student.id,
-        'qrPayload': student.qrPayload,
-        'name': student.name,
-        'prn': student.prn,
-        'studyYear': student.studyYear,
-        'courseName': student.courseName,
-        'division': student.division,
-        'membershipActive': student.membershipActive,
-        'photoUrl': photoUrl,
-        'createdAt': Timestamp.fromDate(student.createdAt),
-        'updatedAt': Timestamp.fromDate(student.updatedAt),
-      },
-      SetOptions(merge: true),
-    );
-
-    return StudentSyncUpdate(
-      studentId: student.id,
-      photoUrl: photoUrl,
-      synced: true,
-    );
-  }
 
   Future<AttendanceSyncUpdate> _syncAttendanceLog(AttendanceLog log) async {
     final DocumentReference<Map<String, dynamic>> logRef =
@@ -268,16 +307,50 @@ class FirebaseService {
       qrPayload: data['qrPayload'] as String? ?? snapshot.id,
       name: data['name'] as String? ?? '',
       prn: data['prn'] as String? ?? '',
-      studyYear: data['studyYear'] as String? ?? '',
-      courseName: data['courseName'] as String? ?? '',
-      division: data['division'] as String? ?? '',
       membershipActive: data['membershipActive'] as bool? ?? true,
+      deleted: data['deleted'] as bool? ?? false,
       photoPath: '',
       photoUrl: data['photoUrl'] as String? ?? '',
       syncedToCloud: true,
       createdAt: _dateFromFirestore(data['createdAt']),
       updatedAt: _dateFromFirestore(data['updatedAt']),
     );
+  }
+
+  Future<void> deleteStudentData(String studentId, String? photoUrl) async {
+    // 1. Delete photo from Storage first
+    // We use the ID-based path because refFromURL can sometimes fail if the URL is old
+    try {
+      final Reference photoRef = _storage!.ref().child('students/photos/$studentId.jpg');
+      await photoRef.delete();
+    } catch (e) {
+      debugPrint('Storage photo delete skipped (might not exist): $e');
+    }
+
+    final batch = _firestore!.batch();
+
+    // 2. Delete the Student document
+    batch.delete(_firestore!.collection('students').doc(studentId));
+
+    // 3. Cleanup all attendance logs for this student
+    final logs = await _firestore!
+        .collection('attendance_logs')
+        .where('studentId', isEqualTo: studentId)
+        .get();
+    for (var doc in logs.docs) {
+      batch.delete(doc.reference);
+    }
+
+    // 4. Cleanup duplicate protection keys
+    final keys = await _firestore!
+        .collection('attendance_keys')
+        .where('studentId', isEqualTo: studentId)
+        .get();
+    for (var doc in keys.docs) {
+      batch.delete(doc.reference);
+    }
+
+    await batch.commit();
   }
 
   AttendanceLog _attendanceFromSnapshot(
@@ -335,4 +408,19 @@ class FirebaseService {
     final String day = timestamp.day.toString().padLeft(2, '0');
     return '${timestamp.year}-$month-$day';
   }
+
+  Future<File?> downloadStudentPhoto(String url, String localPath) async {
+  try {
+    final response = await http.get(Uri.parse(url));
+    if (response.statusCode == 200) {
+      final file = File(localPath);
+      await file.writeAsBytes(response.bodyBytes);
+      return file;
+    }
+  } catch (e) {
+    print('Error downloading image: $e');
+  }
+  return null;
+}
+
 }

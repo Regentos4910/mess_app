@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
@@ -15,18 +16,12 @@ class StudentDraft {
   const StudentDraft({
     required this.name,
     required this.prn,
-    required this.studyYear,
-    required this.courseName,
-    required this.division,
     required this.membershipActive,
     required this.photoPath,
   });
 
   final String name;
   final String prn;
-  final String studyYear;
-  final String courseName;
-  final String division;
   final bool membershipActive;
   final String photoPath;
 }
@@ -74,6 +69,7 @@ class AppController extends ChangeNotifier {
         _enableConnectivityMonitoring = enableConnectivityMonitoring;
 
   final FirebaseService _firebaseService;
+  FirebaseService get firebaseService => _firebaseService;
   final StudentService _studentService;
   final AttendanceService _attendanceService;
   final LocalStorageService _localStorageService;
@@ -92,7 +88,8 @@ class AppController extends ChangeNotifier {
   DateTime? _lastSyncAttempt;
   String _syncStatus = 'Preparing local cache and Firebase backend.';
 
-  List<Student> get students => _studentService.sortStudents(_students);
+  List<Student> get students => 
+    _studentService.sortStudents(_students.where((s) => !s.deleted));
   List<AttendanceLog> get attendanceLogs {
     final List<AttendanceLog> items = List<AttendanceLog>.from(_attendanceLogs)
       ..sort((AttendanceLog a, AttendanceLog b) => b.timestamp.compareTo(a.timestamp));
@@ -230,10 +227,8 @@ class AppController extends ChangeNotifier {
       qrPayload: id,
       name: draft.name.trim(),
       prn: draft.prn.trim(),
-      studyYear: draft.studyYear.trim(),
-      courseName: draft.courseName.trim(),
-      division: draft.division.trim(),
       membershipActive: draft.membershipActive,
+      deleted: false,
       photoPath: storedPhotoPath,
       photoUrl: '',
       syncedToCloud: false,
@@ -308,8 +303,9 @@ class AppController extends ChangeNotifier {
 
   ScanOutcome? inspectQrPayload(String qrPayload) {
     final Student? student = findStudentByQr(qrPayload);
-    if (student == null) {
-      return null;
+    // If student is null or exists but is marked for deletion, deny entry.
+    if (student == null || student.deleted) {
+      return null; 
     }
     final DateTime now = DateTime.now();
     final String duplicateKey = _attendanceService.buildDuplicateKey(
@@ -456,60 +452,96 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> _mergeRemoteState() async {
-    try {
-      final List<Student> remoteStudents = await _firebaseService.fetchStudents();
-      final List<AttendanceLog> remoteLogs =
-          await _firebaseService.fetchAttendanceLogs();
+Future<void> _mergeRemoteState() async {
+  try {
+    final List<Student> remoteStudents = await _firebaseService.fetchStudents();
+    final List<AttendanceLog> remoteLogs = await _firebaseService.fetchAttendanceLogs();
 
-      final Map<String, Student> mergedStudents = <String, Student>{
-        for (final Student student in _students) student.id: student,
-      };
-      for (final Student remote in remoteStudents) {
-        final Student? local = mergedStudents[remote.id];
-        if (local == null || remote.updatedAt.isAfter(local.updatedAt)) {
-          mergedStudents[remote.id] = remote;
-        }
+    // --- NEW LOGIC: Cross-Device Deletion Sync ---
+    // If a student exists locally and was previously synced, but is missing from
+    // the remote list, it means they were deleted from another device.
+    final Set<String> remoteIds = remoteStudents.map((s) => s.id).toSet();
+    
+    // 1. Identify students to remove locally
+    final List<Student> toDeleteLocally = _students.where((local) => 
+        local.syncedToCloud && !remoteIds.contains(local.id)).toList();
+
+    for (var student in toDeleteLocally) {
+      // Clean up their photo from disk
+      if (student.photoPath.isNotEmpty) {
+        final file = File(student.photoPath);
+        if (await file.exists()) await file.delete();
       }
-
-      final Map<String, AttendanceLog> mergedLogs = <String, AttendanceLog>{
-        for (final AttendanceLog log in _attendanceLogs) log.id: log,
-      };
-      for (final AttendanceLog remote in remoteLogs) {
-        final AttendanceLog? local = mergedLogs[remote.id];
-        if (local == null || remote.syncedToCloud || remote.timestamp.isAfter(local.timestamp)) {
-          mergedLogs[remote.id] = remote;
-        }
-      }
-
-      _students
-        ..clear()
-        ..addAll(mergedStudents.values);
-      _attendanceLogs
-        ..clear()
-        ..addAll(mergedLogs.values);
-      _rebuildDuplicateKeys();
-      await _persistState();
-    } catch (_) {
-      _syncStatus =
-          'Firebase is configured, but the database could not be read yet. Local cache remains active.';
+      _students.removeWhere((s) => s.id == student.id);
     }
+
+    // 2. Remove local logs for non-existent students
+    _attendanceLogs.removeWhere((log) => 
+        log.syncedToCloud && !remoteIds.contains(log.studentId));
+    // ----------------------------------------------
+
+    final Map<String, Student> mergedStudents = <String, Student>{
+      for (final Student student in _students) student.id: student,
+    };
+
+    for (final Student remote in remoteStudents) {
+      final Student? local = mergedStudents[remote.id];
+      Student studentToProcess = remote;
+
+      if (remote.photoUrl.isNotEmpty) {
+        final String localDir = '${Directory.systemTemp.path}/mess_app_local/photos';
+        await Directory(localDir).create(recursive: true);
+        final String localPath = '$localDir/${remote.id}.jpg';
+        final File localFile = File(localPath);
+
+        if (!localFile.existsSync()) {
+          try {
+            await _firebaseService.downloadStudentPhoto(remote.photoUrl, localPath);
+            studentToProcess = remote.copyWith(photoPath: localPath);
+          } catch (e) {
+            debugPrint('Failed to download photo for ${remote.name}: $e');
+          }
+        } else {
+          studentToProcess = remote.copyWith(photoPath: localPath);
+        }
+      }
+
+      if (local == null || remote.updatedAt.isAfter(local.updatedAt)) {
+        mergedStudents[remote.id] = studentToProcess;
+      }
+    }
+
+    final Map<String, AttendanceLog> mergedLogs = <String, AttendanceLog>{
+      for (final AttendanceLog log in _attendanceLogs) log.id: log,
+    };
+
+    for (final AttendanceLog remote in remoteLogs) {
+      final AttendanceLog? local = mergedLogs[remote.id];
+      if (local == null || remote.syncedToCloud || remote.timestamp.isAfter(local.timestamp)) {
+        mergedLogs[remote.id] = remote;
+      }
+    }
+
+    _students..clear()..addAll(mergedStudents.values);
+    _attendanceLogs..clear()..addAll(mergedLogs.values);
+
+    _rebuildDuplicateKeys();
+    await _persistState();
+  } catch (e) {
+    _syncStatus = 'Firebase read error: $e';
   }
+}
 
   void _rebuildDuplicateKeys() {
-    _duplicateKeys.clear();
-    for (final AttendanceLog log in _attendanceLogs) {
-      if (log.decision == AttendanceDecision.allowed) {
-        _duplicateKeys.add(
-          _attendanceService.buildDuplicateKey(
-            studentId: log.studentId,
-            mealType: log.mealType,
-            timestamp: log.timestamp,
-          ),
-        );
-      }
+  _duplicateKeys.clear();
+  final String today = _attendanceService.buildDayKey(DateTime.now());
+  for (final AttendanceLog log in _attendanceLogs) {
+    // Only track duplicates for today's meals
+    if (log.decision == AttendanceDecision.allowed && log.dayKey == today) {
+      _duplicateKeys.add('${log.studentId}_${log.mealType.name}_$today');
     }
   }
+}
 
   Future<void> _persistState() async {
     await _localStorageService.writeState(
@@ -525,13 +557,47 @@ class AppController extends ChangeNotifier {
   }
 
   String _buildStudentId(StudentDraft draft) {
-    final String course = draft.courseName
-        .trim()
-        .toUpperCase()
-        .replaceAll(RegExp(r'[^A-Z0-9]+'), '');
-    final String prn = draft.prn.trim().replaceAll(RegExp(r'\s+'), '');
-    final String year = draft.studyYear.trim().replaceAll(RegExp(r'\s+'), '');
-    return '$prn-$course-$year-${_uuid.v4().substring(0, 6)}';
+  final String cleanName = draft.name.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '_');
+  final String cleanPrn = draft.prn.trim().toLowerCase();
+  
+  return '${cleanPrn}_$cleanName';
+}
+
+Future<void> deleteStudent(String studentId) async {
+    _busy = true;
+    notifyListeners();
+
+    final index = _students.indexWhere((s) => s.id == studentId);
+    if (index == -1) return;
+
+    final student = _students[index];
+
+    // 1. Delete local photo file
+    if (student.photoPath.isNotEmpty) {
+      final file = File(student.photoPath);
+      if (await file.exists()) await file.delete();
+    }
+
+    // 2. Remove from local memory lists entirely
+    _students.removeAt(index);
+    _attendanceLogs.removeWhere((log) => log.studentId == studentId);
+
+    // 3. Persist the now-shorter lists to local storage
+    await _persistState();
+
+    // 4. Wipe from Firebase
+    if (_isOnline && _firebaseService.backendConfigured) {
+      try {
+        await _firebaseService.deleteStudentData(studentId, student.photoUrl);
+      } catch (e) {
+        debugPrint('Cloud deletion failed: $e');
+        // Note: In a production app, you might want to queue this 
+        // to retry later if the user is currently offline.
+      }
+    }
+
+    _busy = false;
+    notifyListeners();
   }
 
   void _seedDemoData() {
@@ -545,10 +611,8 @@ class AppController extends ChangeNotifier {
             qrPayload: '2023001-BTECHCSE-2-AAAA01',
             name: 'Aarav Patil',
             prn: '2023001',
-            studyYear: '2',
-            courseName: 'BTech CSE',
-            division: 'A',
             membershipActive: true,
+            deleted: false,
             photoPath: '',
             photoUrl: '',
             syncedToCloud: false,
@@ -560,10 +624,8 @@ class AppController extends ChangeNotifier {
             qrPayload: '2023002-BSCIT-1-BBBB02',
             name: 'Isha Deshmukh',
             prn: '2023002',
-            studyYear: '1',
-            courseName: 'BSc IT',
-            division: 'B',
             membershipActive: false,
+            deleted: false,
             photoPath: '',
             photoUrl: '',
             syncedToCloud: false,

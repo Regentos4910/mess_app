@@ -4,10 +4,8 @@ class Student {
     required this.qrPayload,
     required this.name,
     required this.prn,
-    required this.studyYear,
-    required this.courseName,
-    required this.division,
     required this.membershipActive,
+    required this.deleted,
     required this.photoPath,
     required this.photoUrl,
     required this.syncedToCloud,
@@ -19,10 +17,8 @@ class Student {
   final String qrPayload;
   final String name;
   final String prn;
-  final String studyYear;
-  final String courseName;
-  final String division;
   final bool membershipActive;
+  final bool deleted;
   final String photoPath;
   final String photoUrl;
   final bool syncedToCloud;
@@ -32,17 +28,15 @@ class Student {
   bool get hasLocalPhoto => photoPath.isNotEmpty;
   bool get hasRemotePhoto => photoUrl.isNotEmpty;
   bool get hasAnyPhoto => hasLocalPhoto || hasRemotePhoto;
-  String get subtitle => '$courseName • Year $studyYear • Div $division';
+ String get subtitle => 'PRN: $prn';
 
   Student copyWith({
     String? id,
     String? qrPayload,
     String? name,
     String? prn,
-    String? studyYear,
-    String? courseName,
-    String? division,
     bool? membershipActive,
+    bool? deleted,
     String? photoPath,
     String? photoUrl,
     bool? syncedToCloud,
@@ -54,10 +48,8 @@ class Student {
       qrPayload: qrPayload ?? this.qrPayload,
       name: name ?? this.name,
       prn: prn ?? this.prn,
-      studyYear: studyYear ?? this.studyYear,
-      courseName: courseName ?? this.courseName,
-      division: division ?? this.division,
       membershipActive: membershipActive ?? this.membershipActive,
+      deleted: deleted ?? this.deleted,
       photoPath: photoPath ?? this.photoPath,
       photoUrl: photoUrl ?? this.photoUrl,
       syncedToCloud: syncedToCloud ?? this.syncedToCloud,
@@ -72,10 +64,8 @@ class Student {
       'qrPayload': qrPayload,
       'name': name,
       'prn': prn,
-      'studyYear': studyYear,
-      'courseName': courseName,
-      'division': division,
       'membershipActive': membershipActive,
+      'deleted': deleted,
       'photoPath': photoPath,
       'photoUrl': photoUrl,
       'syncedToCloud': syncedToCloud,
@@ -90,10 +80,8 @@ class Student {
       qrPayload: map['qrPayload'] as String,
       name: map['name'] as String,
       prn: map['prn'] as String,
-      studyYear: map['studyYear'] as String,
-      courseName: map['courseName'] as String,
-      division: map['division'] as String,
       membershipActive: map['membershipActive'] as bool? ?? true,
+      deleted: map['deleted'] as bool? ?? false,
       photoPath: map['photoPath'] as String? ?? '',
       photoUrl: map['photoUrl'] as String? ?? '',
       syncedToCloud: map['syncedToCloud'] as bool? ?? false,

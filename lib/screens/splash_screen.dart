@@ -1,16 +1,10 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
-
 import '../services/app_controller.dart';
+import 'dashboard_screen.dart';
 import 'login_screen.dart';
 
 class SplashScreen extends StatefulWidget {
-  const SplashScreen({
-    required this.controller,
-    super.key,
-  });
-
+  const SplashScreen({required this.controller, super.key});
   final AppController controller;
 
   @override
@@ -21,47 +15,39 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    Timer(const Duration(milliseconds: 1400), () {
-      if (!mounted) {
-        return;
-      }
+    _checkAuth();
+  }
+
+  Future<void> _checkAuth() async {
+    // Wait a tiny bit for the UI to settle
+    await Future.delayed(const Duration(milliseconds: 1500));
+
+    if (!mounted) return;
+
+    // Logic: Check Firebase Auth persistence
+    final user = widget.controller.firebaseService.currentUser;
+
+    if (user != null) {
+      // User is already logged in, go to Dashboard
+      Navigator.of(context).pushReplacementNamed(DashboardScreen.routeName);
+    } else {
+      // No user found, go to Login
       Navigator.of(context).pushReplacementNamed(LoginScreen.routeName);
-    });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: <Color>[Color(0xFF052E2B), Color(0xFF0F766E), Color(0xFF5EEAD4)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-        child: const Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Icon(Icons.qr_code_2_rounded, size: 96, color: Colors.white),
-              SizedBox(height: 20),
-              Text(
-                'Mess App',
-                style: TextStyle(
-                  fontSize: 34,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.white,
-                ),
-              ),
-              SizedBox(height: 12),
-              Text(
-                'Attendance and subscription control for rush-hour meals',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white70),
-              ),
-            ],
-          ),
+    return const Scaffold(
+      backgroundColor: Colors.white,
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.restaurant_menu_rounded, size: 80, color: Colors.blueAccent),
+            SizedBox(height: 24),
+            CircularProgressIndicator(strokeWidth: 2),
+          ],
         ),
       ),
     );

@@ -13,11 +13,17 @@ import 'services/app_controller.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize Firebase if not already done
   if (Firebase.apps.isEmpty) {
     await Firebase.initializeApp();
   }
+  
   final AppController controller = AppController();
+  
+  // Initialize controller (this checks Firebase Auth state internally)
   await controller.initialize();
+
   runApp(MyApp(controller: controller));
 }
 
@@ -33,38 +39,28 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Mess App',
+      title: 'Mess Manager',
       theme: ThemeData(
+        useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF0F766E),
+          seedColor: Colors.blueAccent,
           brightness: Brightness.light,
         ),
-        scaffoldBackgroundColor: const Color(0xFFF3FBF9),
+        scaffoldBackgroundColor: Colors.white,
         appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFFF3FBF9),
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.black,
           elevation: 0,
-        ),
-        cardTheme: CardThemeData(
-          color: Colors.white,
-          margin: EdgeInsets.zero,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
+          centerTitle: true,
+          titleTextStyle: TextStyle(
+            color: Colors.black,
+            fontWeight: FontWeight.w900,
+            fontSize: 20,
           ),
         ),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: Colors.white,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide.none,
-          ),
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 16,
-          ),
-        ),
-        useMaterial3: true,
       ),
+      // Splash screen is the entry point
+      initialRoute: '/', 
       routes: <String, WidgetBuilder>{
         '/': (_) => SplashScreen(controller: controller),
         LoginScreen.routeName: (_) => LoginScreen(controller: controller),

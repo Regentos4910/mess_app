@@ -1,6 +1,9 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:mess_app/screens/login_screen.dart';
 
 import '../models/attendance.dart';
+import '../models/student.dart';
 import '../services/app_controller.dart';
 import '../widgets/action_card.dart';
 import '../widgets/stats_card.dart';
@@ -10,7 +13,7 @@ import 'manage_subscription_screen.dart';
 import 'scan_screen.dart';
 import 'student_profile_screen.dart';
 
-class DashboardScreen extends StatelessWidget {
+class DashboardScreen extends StatefulWidget {
   const DashboardScreen({
     required this.controller,
     super.key,
@@ -20,190 +23,265 @@ class DashboardScreen extends StatelessWidget {
   final AppController controller;
 
   @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleLogout() async {
+    final bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        title: const Text('Sign Out?', style: TextStyle(fontWeight: FontWeight.w900)),
+        content: const Text('You will need to log in again to sync data with the cloud.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('CANCEL'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('LOGOUT', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await widget.controller.firebaseService.signOut();
+      if (mounted) {
+        // Redirect to login and clear the navigation stack
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          LoginScreen.routeName, 
+          (route) => false,
+        );
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: controller,
+      animation: widget.controller,
       builder: (BuildContext context, Widget? child) {
-        final DashboardStats stats = controller.dashboardStats();
-        final List<String> mealLabels = <String>['Breakfast', 'Lunch', 'Dinner'];
+        final DashboardStats stats = widget.controller.dashboardStats();
+        final List<Student> filteredStudents = widget.controller
+            .searchStudents(_searchQuery)
+            .take(10)
+            .toList();
 
         return Scaffold(
+          backgroundColor: Colors.white, // Clean white background
           appBar: AppBar(
-            title: const Text('Mess Dashboard'),
-            actions: <Widget>[
+            elevation: 0,
+            backgroundColor: Colors.white,
+            foregroundColor: Colors.black,
+            centerTitle: false,
+            title: const Text(
+              'Mess Manager',
+              style: TextStyle(fontWeight: FontWeight.w900, fontSize: 24, letterSpacing: -0.5),
+            ),
+            actions: [
+              _buildSyncButton(stats.pendingSync),
+              // ADD THIS LOGOUT BUTTON:
               IconButton(
-                onPressed: controller.syncPendingData,
-                icon: const Icon(Icons.sync),
-                tooltip: 'Sync pending data',
+                onPressed: _handleLogout,
+                icon: const Icon(Icons.logout_rounded, color: Colors.orangeAccent),
+                tooltip: 'Logout staff',
               ),
+              const SizedBox(width: 8),
             ],
           ),
-          body: SafeArea(
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: <Widget>[
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(28),
-                    gradient: const LinearGradient(
-                      colors: <Color>[Color(0xFF042F2E), Color(0xFF0F766E)],
-                    ),
-                  ),
+          body: CustomScrollView(
+            slivers: [
+              // 1. Compact Session & Stats Header
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      const Text(
-                        'Current Mode',
-                        style: TextStyle(color: Colors.white70),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Scanning for ${mealLabels[controller.selectedMeal.index]}',
-                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w800,
-                            ),
-                      ),
+                    children: [
+                      _buildMealSelectorRow(),
                       const SizedBox(height: 16),
-                      DropdownButtonFormField<MealType>(
-                        initialValue: controller.selectedMeal,
-                        dropdownColor: Colors.white,
-                        decoration: const InputDecoration(
-                          labelText: 'Meal session',
-                          fillColor: Colors.white,
-                        ),
-                        items: MealType.values
-                            .map(
-                              (MealType meal) => DropdownMenuItem<MealType>(
-                                value: meal,
-                                child: Text(mealLabels[meal.index]),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (MealType? value) {
-                          if (value != null) {
-                            controller.setSelectedMeal(value);
-                          }
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        controller.syncStatus,
-                        style: const TextStyle(color: Colors.white),
-                      ),
+                      _buildCompactStats(stats),
                     ],
                   ),
                 ),
-                const SizedBox(height: 20),
-                SizedBox(
-                  height: 132,
-                  child: Row(
-                    children: <Widget>[
-                      Expanded(
-                        child: StatsCard(
-                          label: 'Students',
-                          value: '${stats.totalStudents}',
-                          color: const Color(0xFF0F766E),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: StatsCard(
-                          label: 'Active',
-                          value: '${stats.activeMembers}',
-                          color: const Color(0xFF15803D),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: StatsCard(
-                          label: 'Served Today',
-                          value: '${stats.servedToday}',
-                          color: const Color(0xFF1D4ED8),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: StatsCard(
-                          label: 'Pending Sync',
-                          value: '${stats.pendingSync}',
-                          color: const Color(0xFFB45309),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-                GridView.count(
+              ),
+
+              // 2. Vibrant Action Grid (Icons have color, cards are light)
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                sliver: SliverGrid.count(
                   crossAxisCount: 2,
-                  shrinkWrap: true,
-                  mainAxisSpacing: 12,
-                  crossAxisSpacing: 12,
-                  physics: const NeverScrollableScrollPhysics(),
-                  childAspectRatio: 1.08,
-                  children: <Widget>[
+                  mainAxisSpacing: 16,
+                  crossAxisSpacing: 16,
+                  childAspectRatio: 1.3,
+                  children: [
                     ActionCard(
-                      title: 'Scan Student',
-                      subtitle: 'Continuous QR scanning with allow or deny flow',
-                      icon: Icons.qr_code_scanner,
-                      onTap: () =>
-                          Navigator.of(context).pushNamed(ScanScreen.routeName),
+                      title: 'Scan QR',
+                      subtitle: 'Entry',
+                      icon: Icons.qr_code_scanner_rounded,
+                      color: Colors.blueAccent, // Vibrant Blue
+                      onTap: () => Navigator.of(context).pushNamed(ScanScreen.routeName),
                     ),
                     ActionCard(
                       title: 'Add Student',
-                      subtitle: 'Capture a photo and generate local QR instantly',
-                      icon: Icons.person_add_alt_1,
-                      onTap: () => Navigator.of(context)
-                          .pushNamed(AddStudentScreen.routeName),
+                      subtitle: 'New',
+                      icon: Icons.person_add_alt_1_rounded,
+                      color: Colors.orangeAccent, // Vibrant Orange
+                      onTap: () => Navigator.of(context).pushNamed(AddStudentScreen.routeName),
                     ),
                     ActionCard(
-                      title: 'Attendance History',
-                      subtitle: 'Review allowed and denied entries per meal',
-                      icon: Icons.history,
-                      onTap: () => Navigator.of(context)
-                          .pushNamed(AttendanceHistoryScreen.routeName),
+                      title: 'History',
+                      subtitle: 'Logs',
+                      icon: Icons.history_rounded,
+                      color: Colors.redAccent, // Vibrant Red
+                      onTap: () => Navigator.of(context).pushNamed(AttendanceHistoryScreen.routeName),
                     ),
                     ActionCard(
-                      title: 'Subscriptions',
-                      subtitle: 'Activate or deactivate membership in bulk',
-                      icon: Icons.verified_user,
-                      onTap: () => Navigator.of(context)
-                          .pushNamed(ManageSubscriptionScreen.routeName),
+                      title: 'Directory',
+                      subtitle: 'Manage',
+                      icon: Icons.folder_shared_rounded,
+                      color: Colors.tealAccent.shade700, // Vibrant Teal
+                      onTap: () => Navigator.of(context).pushNamed(ManageSubscriptionScreen.routeName),
                     ),
                   ],
                 ),
-                const SizedBox(height: 20),
-                Text(
-                  'Students',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+              ),
+
+              // 3. Search Bar
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
+                  child: _buildSearchBar(),
                 ),
-                const SizedBox(height: 12),
-                ...controller.students.take(5).map(
-                      (student) => Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: ListTile(
-                          tileColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(18),
-                          ),
-                          title: Text(student.name),
-                          subtitle: Text('${student.prn} • ${student.subtitle}'),
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: () => Navigator.of(context).pushNamed(
-                            StudentProfileScreen.routeName,
-                            arguments: student.id,
-                          ),
-                        ),
+              ),
+
+              // 4. Student List
+              filteredStudents.isEmpty
+                  ? const SliverToBoxAdapter(
+                      child: Center(child: Padding(
+                        padding: EdgeInsets.all(40),
+                        child: Text('No students found', style: TextStyle(color: Colors.grey)),
+                      )),
+                    )
+                  : SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) => _buildStudentTile(filteredStudents[index]),
+                        childCount: filteredStudents.length,
                       ),
                     ),
-              ],
-            ),
+              
+              const SliverToBoxAdapter(child: SizedBox(height: 100)),
+            ],
           ),
         );
       },
+    );
+  }
+
+  Widget _buildSyncButton(int pending) {
+    return IconButton(
+      onPressed: widget.controller.syncPendingData,
+      icon: Icon(
+        pending > 0 ? Icons.sync_problem_rounded : Icons.sync_rounded,
+        color: pending > 0 ? Colors.redAccent : Colors.blueAccent,
+      ),
+    );
+  }
+
+  Widget _buildMealSelectorRow() {
+    final List<String> mealLabels = ['Breakfast', 'Lunch', 'Dinner'];
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(40), // Circular borders
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<MealType>(
+          value: widget.controller.selectedMeal,
+          icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.blueAccent),
+          style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 16),
+          items: MealType.values.map((m) => DropdownMenuItem(value: m, child: Text(mealLabels[m.index]))).toList(),
+          onChanged: (val) {
+            if (val != null) widget.controller.setSelectedMeal(val);
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompactStats(DashboardStats stats) {
+    return Row(
+      children: [
+        _statItem('Total Students', '${stats.totalStudents}', Colors.blueAccent),
+        Container(width: 1, height: 20, color: Colors.grey.shade300),
+        _statItem('Served Today', '${stats.servedToday}', Colors.redAccent),
+      ],
+    );
+  }
+
+  Widget _statItem(String label, String value, Color color) {
+    return Expanded(
+      child: Column(
+        children: [
+          Text(value, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: color)),
+          Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade500)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return TextField(
+      controller: _searchController,
+      onChanged: (val) => setState(() => _searchQuery = val),
+      decoration: InputDecoration(
+        hintText: 'Search Name or PRN...',
+        prefixIcon: const Icon(Icons.search_rounded, color: Colors.blueAccent),
+        filled: true,
+        fillColor: Colors.grey.shade50,
+        contentPadding: const EdgeInsets.symmetric(vertical: 0),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(40), // Circular borders
+          borderSide: BorderSide(color: Colors.grey.shade200),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(40),
+          borderSide: BorderSide(color: Colors.grey.shade200),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStudentTile(Student student) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+      child: ListTile(
+        onTap: () => Navigator.of(context).pushNamed(StudentProfileScreen.routeName, arguments: student.id),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        tileColor: Colors.grey.shade50,
+        leading: CircleAvatar(
+          backgroundColor: Colors.white,
+          backgroundImage: student.photoPath.isNotEmpty && File(student.photoPath).existsSync()
+              ? FileImage(File(student.photoPath))
+              : null,
+          child: student.photoPath.isEmpty ? const Icon(Icons.person, color: Colors.blueAccent) : null,
+        ),
+        title: Text(student.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+        subtitle: Text(student.prn, style: const TextStyle(fontSize: 12)),
+        trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+      ),
     );
   }
 }
