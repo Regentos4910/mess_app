@@ -2,10 +2,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-
 import '../models/student.dart';
 import '../services/app_controller.dart';
-import '../services/student_service.dart'; // Ensure correct path for StudentDraft
 
 class AddStudentScreen extends StatefulWidget {
   const AddStudentScreen({
@@ -111,7 +109,7 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
             padding: const EdgeInsets.all(4),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(color: Colors.blueAccent.withOpacity(0.2), width: 2),
+              border: Border.all(color: Colors.blueAccent.withAlpha(51), width: 2),
             ),
             child: CircleAvatar(
               radius: 65,
@@ -170,15 +168,15 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
       margin: const EdgeInsets.only(top: 8),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       decoration: BoxDecoration(
-        color: _membershipActive ? Colors.tealAccent.withOpacity(0.05) : Colors.grey.shade50,
+        color: _membershipActive ? Colors.tealAccent.withAlpha(13) : Colors.grey.shade50,
         borderRadius: BorderRadius.circular(40),
-        border: Border.all(color: _membershipActive ? Colors.tealAccent.withOpacity(0.3) : Colors.grey.shade200),
+        border: Border.all(color: _membershipActive ? Colors.tealAccent.withAlpha(77) : Colors.grey.shade200),
       ),
       child: SwitchListTile.adaptive(
         value: _membershipActive,
         onChanged: (v) => setState(() => _membershipActive = v),
         title: const Text('Authorize Entry', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-        activeColor: Colors.tealAccent.shade700,
+        activeThumbColor: Colors.tealAccent.shade700,
         contentPadding: EdgeInsets.zero,
       ),
     );
