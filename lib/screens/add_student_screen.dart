@@ -22,6 +22,7 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _prnController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
   final ImagePicker _imagePicker = ImagePicker();
 
   bool _membershipActive = true;
@@ -32,6 +33,7 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
   void dispose() {
     _nameController.dispose();
     _prnController.dispose();
+    _phoneController.dispose();
     super.dispose();
   }
 
@@ -74,6 +76,15 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
                   label: 'PRN Number',
                   icon: Icons.badge_outlined,
                   hint: 'Unique ID code',
+                  isNumber: true,
+                ),
+
+                const SizedBox(height: 20),
+                _buildTextField( // Added this block
+                  controller: _phoneController,
+                  label: 'Phone Number',
+                  icon: Icons.phone_android_rounded,
+                  hint: 'Enter mobile number',
                   isNumber: true,
                 ),
                 
@@ -214,7 +225,7 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
             color: Colors.white,
             borderRadius: BorderRadius.circular(40),
             border: Border.all(color: Colors.grey.shade100),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 20, offset: const Offset(0, 10))],
+            boxShadow: [BoxShadow(color: Colors.black.withAlpha(51), blurRadius: 20, offset: const Offset(0, 10))],
           ),
           child: Column(
             children: [
@@ -261,6 +272,7 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
         StudentDraft(
           name: _nameController.text,
           prn: _prnController.text,
+          phoneNumber: _phoneController.text,
           membershipActive: _membershipActive,
           photoPath: _photoPath,
         ),
@@ -270,10 +282,12 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
         _createdStudent = student;
         _nameController.clear();
         _prnController.clear();
+        _phoneController.clear();
         _membershipActive = true;
         _photoPath = '';
       });
     } catch (e) {
+      // ignore: use_build_context_synchronously
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }

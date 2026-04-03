@@ -32,14 +32,14 @@ class ActionCard extends StatelessWidget {
             gradient: LinearGradient(
               colors: <Color>[
                 baseColor,
-                baseColor.withBlue(baseColor.blue + 20).withRed(baseColor.red - 10),
+                baseColor.withValues(blue: (baseColor.b * 255 + 20).clamp(0, 255) / 255, red: (baseColor.r * 255 - 10).clamp(0, 255) / 255)
               ],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
             boxShadow: [
               BoxShadow(
-                color: baseColor.withOpacity(0.3),
+                color: baseColor.withAlpha(76),
                 blurRadius: 12,
                 offset: const Offset(0, 6),
               ),
@@ -54,7 +54,7 @@ class ActionCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
+                    color: Colors.white.withAlpha(51),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(icon, size: 28, color: Colors.white),
@@ -74,7 +74,7 @@ class ActionCard extends StatelessWidget {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.8),
+                    color: Colors.white.withAlpha(204),
                     fontSize: 11,
                     fontWeight: FontWeight.w400,
                   ),

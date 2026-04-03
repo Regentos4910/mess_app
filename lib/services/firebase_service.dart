@@ -102,6 +102,7 @@ class FirebaseService {
         'qrPayload': student.qrPayload,
         'name': student.name,
         'prn': student.prn,
+        'phoneNumber': student.phoneNumber,
         'membershipActive': student.membershipActive,
         'photoUrl': photoUrl,
         'createdAt': Timestamp.fromDate(student.createdAt),
@@ -150,10 +151,6 @@ Future<void> signOut() async {
         persistenceEnabled: true,
         cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
       );
-
-      // --- UPDATED LOGIC ---
-      // We removed the auto-anonymous login. 
-      // The app will now wait for the user to use the LoginScreen.
       
       if (_auth!.currentUser != null) {
         _backendConfigured = true;
@@ -226,8 +223,6 @@ Future<void> signOut() async {
       attendanceUpdates: attendanceUpdates,
     );
   }
-
-
 
   Future<AttendanceSyncUpdate> _syncAttendanceLog(AttendanceLog log) async {
     final DocumentReference<Map<String, dynamic>> logRef =
@@ -306,6 +301,7 @@ Future<void> signOut() async {
       id: data['id'] as String? ?? snapshot.id,
       qrPayload: data['qrPayload'] as String? ?? snapshot.id,
       name: data['name'] as String? ?? '',
+      phoneNumber: data['phoneNumber'] as String? ?? '',
       prn: data['prn'] as String? ?? '',
       membershipActive: data['membershipActive'] as bool? ?? true,
       deleted: data['deleted'] as bool? ?? false,
@@ -418,7 +414,9 @@ Future<void> signOut() async {
       return file;
     }
   } catch (e) {
-    print('Error downloading image: $e');
+    if (kDebugMode) { // only use print statement if in debug mode
+      print('Error downloading image: $e');
+    }
   }
   return null;
 }

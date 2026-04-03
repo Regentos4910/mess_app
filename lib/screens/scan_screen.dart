@@ -96,7 +96,7 @@ class _ScanScreenState extends State<ScanScreen> {
       children: [
         ColorFiltered(
           colorFilter: ColorFilter.mode(
-            Colors.black.withOpacity(0.4),
+            Colors.black.withAlpha(102),
             BlendMode.srcOut,
           ),
           child: Stack(
@@ -119,7 +119,7 @@ class _ScanScreenState extends State<ScanScreen> {
             height: 260,
             width: 260,
             decoration: BoxDecoration(
-              border: Border.all(color: Colors.blueAccent.withOpacity(0.5), width: 2),
+              border: Border.all(color: Colors.blueAccent.withAlpha(128), width: 2),
               borderRadius: BorderRadius.circular(45),
             ),
           ),
@@ -135,7 +135,7 @@ class _ScanScreenState extends State<ScanScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(40),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 15)],
+        boxShadow: [BoxShadow(color: Colors.black.withAlpha(51), blurRadius: 15)],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -155,9 +155,9 @@ class _ScanScreenState extends State<ScanScreen> {
     return Container(
       padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.6),
+        color: Colors.black.withAlpha(153),
         borderRadius: BorderRadius.circular(40),
-        border: Border.all(color: Colors.white10),
+        border: Border.all(color: Colors.white.withAlpha(26)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -286,9 +286,9 @@ class _ScanScreenState extends State<ScanScreen> {
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
                   decoration: BoxDecoration(
-                    color: isAllowed ? Colors.greenAccent.withOpacity(0.1) : Colors.redAccent.withOpacity(0.05),
+                    color: isAllowed ? Colors.greenAccent.withAlpha(25) : Colors.redAccent.withAlpha(12),
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: isAllowed ? Colors.greenAccent.withOpacity(0.3) : Colors.redAccent.withOpacity(0.2)),
+                    border: Border.all(color: isAllowed ? Colors.greenAccent.withAlpha(76) : Colors.redAccent.withAlpha(51)),
                   ),
                   child: Text(
                     outcome.reason,

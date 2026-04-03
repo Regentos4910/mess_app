@@ -23,7 +23,7 @@ class StatsCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withAlpha(51),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -39,7 +39,7 @@ class StatsCard extends StatelessWidget {
               child: Icon(
                 icon,
                 size: 48,
-                color: color.withOpacity(0.05),
+                color: color.withAlpha(128),
               ),
             ),
           

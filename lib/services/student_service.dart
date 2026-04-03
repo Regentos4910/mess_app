@@ -23,7 +23,8 @@ class StudentService {
       students.where(
         (Student student) =>
             student.name.toLowerCase().contains(needle) ||
-            student.prn.toLowerCase().contains(needle),
+            student.prn.toLowerCase().contains(needle) ||
+            student.phoneNumber.toLowerCase().contains(needle),
       ),
     );
   }

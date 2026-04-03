@@ -135,12 +135,12 @@ class _ManageSubscriptionScreenState extends State<ManageSubscriptionScreen> {
                       duration: const Duration(milliseconds: 200),
                       margin: const EdgeInsets.only(bottom: 8),
                       decoration: BoxDecoration(
-                        color: isSelected ? Colors.blueAccent.withOpacity(0.1) : tileColor,
+                        color: isSelected ? Colors.blueAccent.withAlpha(25) : tileColor,
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
                           color: isSelected 
-                              ? Colors.blueAccent.withOpacity(0.3) 
-                              : Colors.black.withOpacity(0.03),
+                              ? Colors.blueAccent.withAlpha(76) 
+                              : Colors.black.withAlpha(76),
                         ),
                       ),
                       child: ListTile(
@@ -189,7 +189,7 @@ class _ManageSubscriptionScreenState extends State<ManageSubscriptionScreen> {
                           ? const Icon(Icons.check_circle_rounded, color: Colors.blueAccent)
                           : Switch.adaptive(
                               value: student.membershipActive,
-                              activeColor: Colors.blueAccent,
+                              activeThumbColor: Colors.blueAccent,
                               onChanged: (val) => widget.controller.setMembership(
                                 studentId: student.id, 
                                 active: val,
@@ -223,9 +223,9 @@ class _ManageSubscriptionScreenState extends State<ManageSubscriptionScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
+        color: color.withAlpha(20),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.1), width: 0.5),
+        border: Border.all(color: color.withAlpha(25), width: 0.5),
       ),
       child: Text(
         text,
@@ -246,7 +246,7 @@ class _ManageSubscriptionScreenState extends State<ManageSubscriptionScreen> {
         color: Colors.black,
         borderRadius: BorderRadius.circular(40),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 20, offset: const Offset(0, 10))
+          BoxShadow(color: Colors.black.withAlpha(76), blurRadius: 20, offset: const Offset(0, 10))
         ],
       ),
       child: Row(

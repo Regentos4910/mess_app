@@ -16,12 +16,14 @@ class StudentDraft {
   const StudentDraft({
     required this.name,
     required this.prn,
+    required this.phoneNumber, // Added field
     required this.membershipActive,
     required this.photoPath,
   });
 
   final String name;
   final String prn;
+  final String phoneNumber; // Added property
   final bool membershipActive;
   final String photoPath;
 }
@@ -232,6 +234,7 @@ class AppController extends ChangeNotifier {
       qrPayload: id,
       name: draft.name.trim(),
       prn: draft.prn.trim(),
+      phoneNumber: draft.phoneNumber.trim(), // Added mapping from draft
       membershipActive: draft.membershipActive,
       deleted: false,
       photoPath: storedPhotoPath,
@@ -630,6 +633,7 @@ Future<void> deleteStudent(String studentId) async {
             qrPayload: '2023001-BTECHCSE-2-AAAA01',
             name: 'Aarav Patil',
             prn: '2023001',
+            phoneNumber: '', // Added empty default for demo
             membershipActive: true,
             deleted: false,
             photoPath: '',
@@ -643,6 +647,7 @@ Future<void> deleteStudent(String studentId) async {
             qrPayload: '2023002-BSCIT-1-BBBB02',
             name: 'Isha Deshmukh',
             prn: '2023002',
+            phoneNumber: '', // Added empty default for demo
             membershipActive: false,
             deleted: false,
             photoPath: '',

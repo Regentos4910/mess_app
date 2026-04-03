@@ -4,6 +4,7 @@ class Student {
     required this.qrPayload,
     required this.name,
     required this.prn,
+    required this.phoneNumber,
     required this.membershipActive,
     required this.deleted,
     required this.photoPath,
@@ -17,6 +18,7 @@ class Student {
   final String qrPayload;
   final String name;
   final String prn;
+  final String phoneNumber;
   final bool membershipActive;
   final bool deleted;
   final String photoPath;
@@ -28,13 +30,14 @@ class Student {
   bool get hasLocalPhoto => photoPath.isNotEmpty;
   bool get hasRemotePhoto => photoUrl.isNotEmpty;
   bool get hasAnyPhoto => hasLocalPhoto || hasRemotePhoto;
- String get subtitle => 'PRN: $prn';
+  String get subtitle => 'PRN: $prn';
 
   Student copyWith({
     String? id,
     String? qrPayload,
     String? name,
     String? prn,
+    String? phoneNumber,
     bool? membershipActive,
     bool? deleted,
     String? photoPath,
@@ -48,6 +51,7 @@ class Student {
       qrPayload: qrPayload ?? this.qrPayload,
       name: name ?? this.name,
       prn: prn ?? this.prn,
+      phoneNumber: phoneNumber ?? this.phoneNumber,
       membershipActive: membershipActive ?? this.membershipActive,
       deleted: deleted ?? this.deleted,
       photoPath: photoPath ?? this.photoPath,
@@ -64,6 +68,7 @@ class Student {
       'qrPayload': qrPayload,
       'name': name,
       'prn': prn,
+      'phoneNumber': phoneNumber,
       'membershipActive': membershipActive,
       'deleted': deleted,
       'photoPath': photoPath,
@@ -80,6 +85,7 @@ class Student {
       qrPayload: map['qrPayload'] as String,
       name: map['name'] as String,
       prn: map['prn'] as String,
+      phoneNumber: map['phoneNumber'] as String? ?? '', 
       membershipActive: map['membershipActive'] as bool? ?? true,
       deleted: map['deleted'] as bool? ?? false,
       photoPath: map['photoPath'] as String? ?? '',

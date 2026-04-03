@@ -95,7 +95,7 @@ class StudentProfileScreen extends StatelessWidget {
           padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            border: Border.all(color: isActive ? Colors.blueAccent.withOpacity(0.2) : Colors.grey.shade200, width: 2),
+            border: Border.all(color: isActive ? Colors.blueAccent.withAlpha(51) : Colors.grey.shade200, width: 2),
           ),
           child: CircleAvatar(
             radius: 55,
@@ -115,6 +115,34 @@ class StudentProfileScreen extends StatelessWidget {
         const SizedBox(height: 4),
         Text('PRN ${student.prn}', 
           style: TextStyle(fontSize: 15, color: Colors.grey.shade600, fontWeight: FontWeight.w600)),
+        
+        // --- PHONE NUMBER DISPLAY SECTION ---
+        if (student.phoneNumber.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.phone_android_rounded, size: 14, color: Colors.blueAccent.withAlpha(178)),
+                const SizedBox(width: 6),
+                Text(
+                  student.phoneNumber, 
+                  style: TextStyle(
+                    fontSize: 14, 
+                    color: Colors.grey.shade700, 
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -128,9 +156,9 @@ class StudentProfileScreen extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 16),
         decoration: BoxDecoration(
-          color: active ? Colors.grey.shade50 : Colors.tealAccent.withOpacity(0.1),
+          color: active ? Colors.grey.shade50 : Colors.tealAccent.withAlpha(25),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: active ? Colors.grey.shade200 : Colors.tealAccent.withOpacity(0.5)),
+          border: Border.all(color: active ? Colors.grey.shade200 : Colors.tealAccent.withAlpha(128)),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -164,7 +192,7 @@ class StudentProfileScreen extends StatelessWidget {
             color: Colors.white,
             borderRadius: BorderRadius.circular(40),
             border: Border.all(color: Colors.grey.shade100),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 20, offset: const Offset(0, 10))],
+            boxShadow: [BoxShadow(color: Colors.black.withAlpha(51), blurRadius: 20, offset: const Offset(0, 10))],
           ),
           child: QrImageView(
             data: student.qrPayload,
@@ -213,7 +241,7 @@ class StudentProfileScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: allowed ? Colors.greenAccent.withOpacity(0.1) : Colors.redAccent.withOpacity(0.1),
+              color: allowed ? Colors.greenAccent.withAlpha(25) : Colors.redAccent.withAlpha(25),
               shape: BoxShape.circle,
             ),
             child: Icon(

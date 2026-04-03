@@ -6,7 +6,6 @@ import '../models/attendance.dart';
 import '../models/student.dart';
 import '../services/app_controller.dart';
 import '../widgets/action_card.dart';
-import '../widgets/stats_card.dart';
 import 'add_student_screen.dart';
 import 'attendance_history_screen.dart';
 import 'manage_subscription_screen.dart';

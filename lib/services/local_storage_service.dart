@@ -4,9 +4,7 @@ import 'package:path_provider/path_provider.dart'; // Add this package
 
 class LocalStorageService {
   const LocalStorageService();
-
-  // CHANGE 1: Make appDirectory public so AppController can see it
-  // CHANGE 2: Use getApplicationDocumentsDirectory() instead of systemTemp
+  
   Future<Directory> appDirectory() async {
     final dir = await getApplicationDocumentsDirectory();
     return Directory('${dir.path}/mess_app_data_v1');
