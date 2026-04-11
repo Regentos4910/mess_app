@@ -82,6 +82,28 @@ class AppController extends ChangeNotifier {
   final List<AttendanceLog> _attendanceLogs = <AttendanceLog>[];
   final Set<String> _duplicateKeys = <String>{};
 
+  String _userRole = 'employee'; // Default
+  String get userRole => _userRole;
+
+StreamSubscription? _roleSubscription;
+
+  void _startRoleListener(String uid) {
+    _roleSubscription?.cancel();
+    _roleSubscription = _firebaseService.userRoleStream(uid).listen((role) {
+      if (_userRole != role) {
+        _userRole = role;
+        notifyListeners(); 
+      }
+    });
+  }
+
+// Update your disposeController to clean up the stream
+Future<void> disposeController() async {
+  await _roleSubscription?.cancel();
+  await _connectivitySubscription?.cancel();
+  dispose();
+}
+
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
   bool _initialized = false;
   bool _busy = false;
@@ -112,14 +134,28 @@ class AppController extends ChangeNotifier {
     return studentPending + attendancePending;
   }
 
-  Future<void> initialize() async {
+Future<void> initialize() async {
     if (_initialized) {
+      // Already initialized — but if a user just logged in, re-fetch their role
+      if (_firebaseService.currentUser != null) {
+        final String uid = _firebaseService.currentUser!.uid;
+        _userRole = await _firebaseService.getUserRole(uid);
+        _startRoleListener(uid);
+        notifyListeners();
+      }
       return;
     }
 
     await _restoreState();
     await _primeConnectivity();
     await _firebaseService.initialize();
+
+    if (_firebaseService.currentUser != null) {
+      final String uid = _firebaseService.currentUser!.uid;
+      _userRole = await _firebaseService.getUserRole(uid); 
+      _startRoleListener(uid);
+    }
+
     _syncStatus = _firebaseService.statusMessage;
     if (_firebaseService.backendConfigured) {
       await _mergeRemoteState();
@@ -134,6 +170,22 @@ class AppController extends ChangeNotifier {
     _initialized = true;
     notifyListeners();
   }
+
+  Future<void> refresh() async {
+  if (_busy) return; // Prevent concurrent refreshes
+  _busy = true;
+  notifyListeners();
+
+  try {
+    await syncPendingData();
+    await _mergeRemoteState();
+  } catch (e) {
+    _syncStatus = 'Refresh failed: $e';
+  } finally {
+    _busy = false;
+    notifyListeners();
+  }
+}
 
   Future<void> _restoreState() async {
     final Map<String, dynamic> state = await _localStorageService.readState();
@@ -197,11 +249,6 @@ class AppController extends ChangeNotifier {
       _isOnline = false;
       _syncStatus = 'Connectivity plugin unavailable. Running with cached data only.';
     }
-  }
-
-  Future<void> disposeController() async {
-    await _connectivitySubscription?.cancel();
-    dispose();
   }
 
   void setSelectedMeal(MealType value) {
@@ -375,21 +422,24 @@ class AppController extends ChangeNotifier {
   }
 
   DashboardStats dashboardStats() {
-    final String today = _attendanceService.buildDayKey(DateTime.now());
-    final int servedToday = _attendanceLogs.where((AttendanceLog log) {
-      return log.dayKey == today &&
-          log.mealType == _selectedMeal &&
-          log.decision == AttendanceDecision.allowed;
-    }).length;
+      final String today = _attendanceService.buildDayKey(DateTime.now());
+      
+      // MODIFIED: Only count logs that are synced to cloud (Global Data)
+      final int globalServedToday = _attendanceLogs.where((AttendanceLog log) {
+        return log.dayKey == today &&
+            log.mealType == _selectedMeal &&
+            log.decision == AttendanceDecision.allowed &&
+            log.syncedToCloud == true; // <--- This ensures only global data is counted
+      }).length;
 
-    return DashboardStats(
-      totalStudents: _students.length,
-      activeMembers:
-          _students.where((Student student) => student.membershipActive).length,
-      servedToday: servedToday,
-      pendingSync: pendingSyncCount,
-    );
-  }
+      return DashboardStats(
+        totalStudents: _students.length,
+        activeMembers:
+            _students.where((Student student) => student.membershipActive).length,
+        servedToday: globalServedToday, // Passing the global count
+        pendingSync: pendingSyncCount,
+      );
+    }
 
   List<Student> searchStudents(String query) {
     return _studentService.search(_students, query);
@@ -547,23 +597,25 @@ Future<void> _mergeRemoteState() async {
   }
 
   void _rebuildDuplicateKeys() {
-    _duplicateKeys.clear();
-    final DateTime now = DateTime.now();
-    // Only track duplicates for the current date to save memory
-    final String today = _attendanceService.buildDayKey(now);
+  _duplicateKeys.clear();
+  final String today = _attendanceService.buildDayKey(DateTime.now());
+  
+  // Optimization: Iterate backwards or filter first to avoid processing 
+  // years of old logs for a simple daily duplicate check.
+  for (final AttendanceLog log in _attendanceLogs.reversed) {
+    // If we hit logs from yesterday, we can stop (assuming logs are sorted)
+    if (log.dayKey != today) continue; 
     
-    for (final AttendanceLog log in _attendanceLogs) {
-      if (log.decision == AttendanceDecision.allowed && log.dayKey == today) {
-        // Use the service to build the key to ensure consistent formatting
-        final key = _attendanceService.buildDuplicateKey(
-          studentId: log.studentId,
-          mealType: log.mealType,
-          timestamp: log.timestamp,
-        );
-        _duplicateKeys.add(key);
-      }
+    if (log.decision == AttendanceDecision.allowed) {
+      final key = _attendanceService.buildDuplicateKey(
+        studentId: log.studentId,
+        mealType: log.mealType,
+        timestamp: log.timestamp,
+      );
+      _duplicateKeys.add(key);
     }
   }
+}
 
   Future<void> _persistState() async {
     await _localStorageService.writeState(

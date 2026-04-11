@@ -44,10 +44,12 @@ class StudentProfileScreen extends StatelessWidget {
             centerTitle: true,
             title: const Text('Profile', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20)),
             actions: [
-              IconButton(
-                icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
-                onPressed: () => _confirmDeletion(context, student),
-              ),
+              // ONLY SHOW DELETE TO ADMINS
+              if (controller.userRole == 'admin')
+                IconButton(
+                  icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+                  onPressed: () => _confirmDeletion(context, student),
+                ),
               const SizedBox(width: 8),
             ],
           ),
@@ -65,7 +67,9 @@ class StudentProfileScreen extends StatelessWidget {
                 // 2. Actionable Membership Control
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: _buildMembershipAction(student),
+                  child: controller.userRole == 'admin' 
+                      ? _buildMembershipAction(student) 
+                      : _buildMembershipStatusOnly(student), // Show status if not admin
                 ),
 
                 const SizedBox(height: 32),
@@ -146,6 +150,35 @@ class StudentProfileScreen extends StatelessWidget {
       ],
     );
   }
+
+  Widget _buildMembershipStatusOnly(Student student) {
+  final bool active = student.membershipActive;
+  return Container(
+    width: double.infinity,
+    padding: const EdgeInsets.symmetric(vertical: 16),
+    decoration: BoxDecoration(
+      color: Colors.grey.shade50,
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: Colors.grey.shade200),
+    ),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(active ? Icons.verified_user_rounded : Icons.info_outline_rounded, 
+            size: 20, color: active ? Colors.tealAccent.shade700 : Colors.orangeAccent),
+        const SizedBox(width: 10),
+        Text(
+          active ? 'Membership Active' : 'Membership Inactive',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 15,
+            color: active ? Colors.tealAccent.shade700 : Colors.orangeAccent.shade700,
+          ),
+        ),
+      ],
+    ),
+  );
+}
 
   Widget _buildMembershipAction(Student student) {
     final bool active = student.membershipActive;

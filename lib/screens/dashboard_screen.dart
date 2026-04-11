@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:mess_app/screens/login_screen.dart';
 
@@ -35,30 +36,54 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.dispose();
   }
 
-  Future<void> _handleLogout() async {
+Future<void> _handleLogout() async {
     final bool? confirm = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-        title: const Text('Sign Out?', style: TextStyle(fontWeight: FontWeight.w900)),
-        content: const Text('You will need to log in again to sync data with the cloud.'),
+      builder: (BuildContext context) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Row(
+          children: [
+            Icon(Icons.logout_rounded, color: Colors.redAccent),
+            SizedBox(width: 12),
+            Text('Sign Out?', style: TextStyle(fontWeight: FontWeight.w900)),
+          ],
+        ),
+        content: const Text(
+          'Are you sure you want to log out? Any unsynced data will remain on this device.',
+          style: TextStyle(color: Colors.black54, fontSize: 15),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('CANCEL'),
+            child: Text('CANCEL', 
+              style: TextStyle(color: Colors.grey.shade600, fontWeight: FontWeight.bold)),
           ),
-          TextButton(
+          ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('LOGOUT', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('LOGOUT', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
     );
 
     if (confirm == true) {
+      // Show a snackbar or overlay if the network is slow
+      // ignore: use_build_context_synchronously
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Signing out...'), duration: Duration(seconds: 1)),
+      );
+
       await widget.controller.firebaseService.signOut();
+      
       if (mounted) {
-        // Redirect to login and clear the navigation stack
         Navigator.of(context).pushNamedAndRemoveUntil(
           LoginScreen.routeName, 
           (route) => false,
@@ -73,13 +98,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
       animation: widget.controller,
       builder: (BuildContext context, Widget? child) {
         final DashboardStats stats = widget.controller.dashboardStats();
+        
+        // Check if user is Admin
+        final bool isAdmin = widget.controller.userRole == 'admin';
+
         final List<Student> filteredStudents = widget.controller
             .searchStudents(_searchQuery)
-            .take(10)
+            .take(isAdmin ? 10 : 5)
             .toList();
 
         return Scaffold(
-          backgroundColor: Colors.white, // Clean white background
+          backgroundColor: Colors.white,
           appBar: AppBar(
             elevation: 0,
             backgroundColor: Colors.white,
@@ -90,19 +119,44 @@ class _DashboardScreenState extends State<DashboardScreen> {
               style: TextStyle(fontWeight: FontWeight.w900, fontSize: 24, letterSpacing: -0.5),
             ),
             actions: [
-              _buildSyncButton(stats.pendingSync),
-              // ADD THIS LOGOUT BUTTON:
+              // Updated Sync/Refresh Button
+              IconButton(
+                onPressed: widget.controller.busy
+                    ? null // Disable while refresh is in progress
+                    : () async {
+                        await widget.controller.refresh();
+                        if (mounted) {
+                          // ignore: use_build_context_synchronously
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Data refreshed'),
+                              duration: Duration(seconds: 1),
+                            ),
+                          );
+                        }
+                      },
+                icon: widget.controller.busy
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.blueAccent),
+                      )
+                    : Icon(
+                        stats.pendingSync > 0
+                            ? Icons.sync_problem_rounded
+                            : Icons.refresh_rounded,
+                        color: stats.pendingSync > 0 ? Colors.redAccent : Colors.blueAccent,
+                      ),
+              ),
               IconButton(
                 onPressed: _handleLogout,
                 icon: const Icon(Icons.logout_rounded, color: Colors.orangeAccent),
-                tooltip: 'Logout staff',
               ),
               const SizedBox(width: 8),
             ],
           ),
           body: CustomScrollView(
             slivers: [
-              // 1. Compact Session & Stats Header
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
@@ -110,13 +164,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     children: [
                       _buildMealSelectorRow(),
                       const SizedBox(height: 16),
-                      _buildCompactStats(stats),
+                      // ONLY SHOW STATS TO ADMIN
+                      if (isAdmin) _buildCompactStats(stats),
                     ],
                   ),
                 ),
               ),
 
-              // 2. Vibrant Action Grid (Icons have color, cards are light)
               SliverPadding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 sliver: SliverGrid.count(
@@ -129,30 +183,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       title: 'Scan QR',
                       subtitle: 'Entry',
                       icon: Icons.qr_code_scanner_rounded,
-                      color: Colors.blueAccent, // Vibrant Blue
+                      color: Colors.blueAccent,
                       onTap: () => Navigator.of(context).pushNamed(ScanScreen.routeName),
                     ),
                     ActionCard(
                       title: 'Add Student',
                       subtitle: 'New',
                       icon: Icons.person_add_alt_1_rounded,
-                      color: Colors.orangeAccent, // Vibrant Orange
+                      color: Colors.orangeAccent,
                       onTap: () => Navigator.of(context).pushNamed(AddStudentScreen.routeName),
                     ),
                     ActionCard(
                       title: 'History',
                       subtitle: 'Logs',
                       icon: Icons.history_rounded,
-                      color: Colors.redAccent, // Vibrant Red
+                      color: Colors.redAccent,
                       onTap: () => Navigator.of(context).pushNamed(AttendanceHistoryScreen.routeName),
                     ),
-                    ActionCard(
-                      title: 'Directory',
-                      subtitle: 'Manage',
-                      icon: Icons.folder_shared_rounded,
-                      color: Colors.tealAccent.shade700, // Vibrant Teal
-                      onTap: () => Navigator.of(context).pushNamed(ManageSubscriptionScreen.routeName),
-                    ),
+                    // ONLY SHOW DIRECTORY TO ADMIN
+                    if (isAdmin)
+                      ActionCard(
+                        title: 'Directory',
+                        subtitle: 'Manage',
+                        icon: Icons.folder_shared_rounded,
+                        color: Colors.tealAccent.shade700,
+                        onTap: () => Navigator.of(context).pushNamed(ManageSubscriptionScreen.routeName),
+                      ),
                   ],
                 ),
               ),
@@ -185,16 +241,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         );
       },
-    );
-  }
-
-  Widget _buildSyncButton(int pending) {
-    return IconButton(
-      onPressed: widget.controller.syncPendingData,
-      icon: Icon(
-        pending > 0 ? Icons.sync_problem_rounded : Icons.sync_rounded,
-        color: pending > 0 ? Colors.redAccent : Colors.blueAccent,
-      ),
     );
   }
 
@@ -270,16 +316,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
         onTap: () => Navigator.of(context).pushNamed(StudentProfileScreen.routeName, arguments: student.id),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         tileColor: Colors.grey.shade50,
-        leading: CircleAvatar(
-          backgroundColor: Colors.white,
-          backgroundImage: student.photoPath.isNotEmpty && File(student.photoPath).existsSync()
-              ? FileImage(File(student.photoPath))
-              : null,
-          child: student.photoPath.isEmpty ? const Icon(Icons.person, color: Colors.blueAccent) : null,
-        ),
+        leading: ClipRRect(
+  borderRadius: BorderRadius.circular(25),
+  child: SizedBox(
+    width: 50,
+    height: 50,
+    child: student.photoPath.isNotEmpty && File(student.photoPath).existsSync()
+        ? Image.file(File(student.photoPath), fit: BoxFit.cover)
+        : (student.photoUrl.isNotEmpty 
+            ? CachedNetworkImage(
+                imageUrl: student.photoUrl,
+                placeholder: (context, url) => Container(color: Colors.grey.shade200),
+                errorWidget: (context, url, error) => const Icon(Icons.person),
+                fit: BoxFit.cover,
+              )
+            : const Icon(Icons.person, color: Colors.blueAccent)),
+  ),
+),
         title: Text(student.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
         subtitle: Text(student.prn, style: const TextStyle(fontSize: 12)),
-        trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+        trailing: Icon(
+          Icons.chevron_right_rounded,
+          color: widget.controller.userRole == 'admin' 
+              ? Colors.blueAccent.withAlpha(180) 
+              : Colors.grey.shade300,
+        ),
       ),
     );
   }

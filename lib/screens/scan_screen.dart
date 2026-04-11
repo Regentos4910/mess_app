@@ -61,32 +61,32 @@ class _ScanScreenState extends State<ScanScreen> {
       ),
       extendBodyBehindAppBar: true,
       body: Stack(
-        children: <Widget>[
-          MobileScanner(
-            controller: _scannerController,
-            onDetect: (BarcodeCapture capture) {
-              if (_handlingScan) return;
-              final String? rawValue = capture.barcodes.first.rawValue;
-              if (rawValue != null && rawValue.trim().isNotEmpty) {
-                HapticFeedback.mediumImpact();
-                _handleScan(rawValue);
-              }
-            },
+      children: <Widget>[
+        MobileScanner(
+          controller: _scannerController,
+          onDetect: (BarcodeCapture capture) {
+            if (_handlingScan) return;
+            final String? rawValue = capture.barcodes.first.rawValue;
+            if (rawValue != null && rawValue.trim().isNotEmpty) {
+              // PRODUCTION ADDITION: Impact feedback
+              HapticFeedback.mediumImpact(); 
+              _handleScan(rawValue);
+            }
+          },
+        ),
+        _buildElegantOverlay(context),
+        Positioned(
+          left: 20,
+          right: 20,
+          bottom: 60, // Adjusted height since selector is gone
+          child: Column(
+            children: [
+              _buildStatusChip(),
+              // MEAL SELECTOR REMOVED FROM HERE
+            ],
           ),
-          _buildElegantOverlay(context),
-          Positioned(
-            left: 20,
-            right: 20,
-            bottom: 40,
-            child: Column(
-              children: [
-                _buildStatusChip(),
-                const SizedBox(height: 20),
-                _buildMealSessionSelector(),
-              ],
-            ),
-          ),
-        ],
+        ),
+      ],
       ),
     );
   }
@@ -151,87 +151,51 @@ class _ScanScreenState extends State<ScanScreen> {
     );
   }
 
-  Widget _buildMealSessionSelector() {
-    return Container(
-      padding: const EdgeInsets.all(6),
-      decoration: BoxDecoration(
-        color: Colors.black.withAlpha(153),
-        borderRadius: BorderRadius.circular(40),
-        border: Border.all(color: Colors.white.withAlpha(26)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: MealType.values.map((meal) {
-          final isSelected = widget.controller.selectedMeal == meal;
-          return GestureDetector(
-            onTap: () => setState(() => widget.controller.setSelectedMeal(meal)),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeOutCubic,
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-              decoration: BoxDecoration(
-                color: isSelected ? Colors.blueAccent : Colors.transparent,
-                borderRadius: BorderRadius.circular(30),
-              ),
-              child: Text(
-                meal.name.toUpperCase(),
-                style: TextStyle(
-                  color: isSelected ? Colors.white : Colors.white54,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 0.5,
-                ),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
+Future<void> _handleScan(String qrPayload) async {
+  if (_handlingScan) return;
+  setState(() => _handlingScan = true);
 
-  Future<void> _handleScan(String qrPayload) async {
-    setState(() => _handlingScan = true);
-    final outcome = widget.controller.inspectQrPayload(qrPayload);
+  // Stop scanning while processing to prevent duplicate popups
+  await _scannerController.stop(); 
 
-    if (outcome == null) {
-      _showErrorSnackBar('No record for this QR');
-      await Future.delayed(const Duration(seconds: 1));
-      setState(() => _handlingScan = false);
-      return;
-    }
+  final outcome = widget.controller.inspectQrPayload(qrPayload);
 
-    if (!mounted) return;
-
-    final AttendanceDecision? decision = await showModalBottomSheet<AttendanceDecision>(
-      context: context,
-      isDismissible: false,
-      enableDrag: false,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(40))),
-      builder: (context) => _buildDecisionSheet(outcome),
-    );
-
-    if (decision != null) {
-      final log = await widget.controller.recordAttendance(
-        student: outcome.student,
-        decision: decision,
-        reason: decision == AttendanceDecision.allowed ? 'Staff authorized' : outcome.reason,
-      );
-      
-      if (decision == AttendanceDecision.allowed) {
-        HapticFeedback.lightImpact();
-      } else {
-        HapticFeedback.vibrate();
-      }
-
-      setState(() {
-        _lastMessage = '${log.studentName}: ${decision.name.toUpperCase()}';
-      });
-    }
-
+  if (outcome == null) {
+    _showErrorSnackBar('No record for this QR');
+    await Future.delayed(const Duration(seconds: 1));
+    await _scannerController.start(); // Restart camera
     setState(() => _handlingScan = false);
+    return;
   }
+
+  if (!mounted) return;
+
+  final AttendanceDecision? decision = await showModalBottomSheet<AttendanceDecision>(
+    context: context,
+    isDismissible: true, // Production tip: Allow dismiss to resume scanning
+    enableDrag: true,
+    isScrollControlled: true,
+    backgroundColor: Colors.white,
+    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(40))),
+    builder: (context) => _buildDecisionSheet(outcome),
+  );
+
+  if (decision != null) {
+    final log = await widget.controller.recordAttendance(
+      student: outcome.student,
+      decision: decision,
+      reason: decision == AttendanceDecision.allowed ? 'Authorized' : outcome.reason,
+    );
+    
+    setState(() {
+      _lastMessage = '${log.studentName}: ${decision.name.toUpperCase()}';
+    });
+  }
+
+  // PRODUCTION REFINEMENT: Ensure camera restarts and wait for UI to settle
+  await _scannerController.start(); 
+  setState(() => _handlingScan = false);
+}
 
   Widget _buildDecisionSheet(ScanOutcome outcome) {
     final student = outcome.student;

@@ -138,6 +138,34 @@ Future<void> signOut() async {
     }
   }
 
+Stream<String> userRoleStream(String uid) {
+  return _firestore!
+      .collection('users')
+      .doc(uid)
+      .snapshots()
+      .map((doc) => doc.data()?['role'] as String? ?? 'employee');
+}
+
+  // Add this method to handle the first-time check
+Future<void> ensureUserExists(User user) async {
+  final userDoc = await _firestore!.collection('users').doc(user.uid).get();
+
+  if (!userDoc.exists) {
+    // This is a first-time login
+    await _firestore!.collection('users').doc(user.uid).set({
+      'email': user.email,
+      'role': 'employee', // Default role
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+}
+
+// Add this to retrieve the role later for UI logic
+Future<String> getUserRole(String uid) async {
+  final doc = await _firestore!.collection('users').doc(uid).get();
+  return doc.data()?['role'] as String? ?? 'employee';
+}
+
   Future<void> initialize() async {
     try {
       if (Firebase.apps.isEmpty) {

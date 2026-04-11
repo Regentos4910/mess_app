@@ -36,10 +36,19 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      await widget.controller.firebaseService.signIn(
+      final userCredential = await widget.controller.firebaseService.signIn(
         _emailController.text,
         _passwordController.text,
       );
+
+      if (userCredential?.user != null) {
+        // 1. Ensure the user document exists in Firestore
+        await widget.controller.firebaseService.ensureUserExists(userCredential!.user!);
+        
+        // 2. IMPORTANT: Force the controller to re-run initialization logic 
+        // to pick up the new user's role and start the listener
+        await widget.controller.initialize(); 
+      }
 
       if (!mounted) return;
       Navigator.of(context).pushReplacementNamed(DashboardScreen.routeName);
