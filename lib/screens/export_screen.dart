@@ -87,6 +87,7 @@ void _processReport(bool isPdf) async {
     }
   } catch (e) {
     debugPrint("Export Error: $e");
+    // ignore: use_build_context_synchronously
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Report Generation Failed: $e')),
     );
