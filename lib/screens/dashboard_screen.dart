@@ -193,13 +193,14 @@ Future<void> _handleLogout() async {
                       color: Colors.orangeAccent,
                       onTap: () => Navigator.of(context).pushNamed(AddStudentScreen.routeName),
                     ),
-                    ActionCard(
-                      title: 'History',
-                      subtitle: 'Logs',
-                      icon: Icons.history_rounded,
-                      color: Colors.redAccent,
-                      onTap: () => Navigator.of(context).pushNamed(AttendanceHistoryScreen.routeName),
-                    ),
+                    if (isAdmin)
+                      ActionCard(
+                        title: 'History',
+                        subtitle: 'Logs',
+                        icon: Icons.history_rounded,
+                        color: Colors.redAccent,
+                        onTap: () => Navigator.of(context).pushNamed(AttendanceHistoryScreen.routeName),
+                      ),
                     // ONLY SHOW DIRECTORY TO ADMIN
                     if (isAdmin)
                       ActionCard(
