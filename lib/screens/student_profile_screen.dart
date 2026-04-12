@@ -45,7 +45,7 @@ class StudentProfileScreen extends StatelessWidget {
             title: const Text('Profile', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20)),
             actions: [
               // ONLY SHOW DELETE TO ADMINS
-              if (controller.userRole == 'admin')
+              if (controller.userRole == 'admin' || controller.userRole == 'superuser')
                 IconButton(
                   icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
                   onPressed: () => _confirmDeletion(context, student),
@@ -67,7 +67,7 @@ class StudentProfileScreen extends StatelessWidget {
                 // 2. Actionable Membership Control
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: controller.userRole == 'admin' 
+                  child: controller.userRole == 'admin' || controller.userRole == 'superuser'
                       ? _buildMembershipAction(student) 
                       : _buildMembershipStatusOnly(student), // Show status if not admin
                 ),

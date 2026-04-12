@@ -1,5 +1,6 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:mess_app/screens/export_screen.dart';
 
 import 'screens/add_student_screen.dart';
 import 'screens/attendance_history_screen.dart';
@@ -71,6 +72,7 @@ class MyApp extends StatelessWidget {
             ManageSubscriptionScreen(controller: controller),
         AttendanceHistoryScreen.routeName: (_) =>
             AttendanceHistoryScreen(controller: controller),
+        '/export-data': (context) => ExportScreen(controller: controller),
       },
       onGenerateRoute: (RouteSettings settings) {
         if (settings.name == StudentProfileScreen.routeName) {

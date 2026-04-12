@@ -100,7 +100,8 @@ Future<void> _handleLogout() async {
         final DashboardStats stats = widget.controller.dashboardStats();
         
         // Check if user is Admin
-        final bool isAdmin = widget.controller.userRole == 'admin';
+        final bool isAdmin = widget.controller.userRole == 'admin' || widget.controller.userRole == 'superuser';
+        final bool isSuperUser = widget.controller.userRole == 'superuser';
 
         final List<Student> filteredStudents = widget.controller
             .searchStudents(_searchQuery)
@@ -119,6 +120,15 @@ Future<void> _handleLogout() async {
               style: TextStyle(fontWeight: FontWeight.w900, fontSize: 24, letterSpacing: -0.5),
             ),
             actions: [
+              if (isSuperUser)
+                IconButton(
+                  onPressed: () => Navigator.of(context).pushNamed('/export-data'),
+                  icon: const Icon(
+                    Icons.description_rounded, // Use the spreadsheet-style icon
+                    color: Colors.green,
+                  ),
+                  tooltip: 'Export Data',
+                ),
               // Updated Sync/Refresh Button
               IconButton(
                 onPressed: widget.controller.busy
