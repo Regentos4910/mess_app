@@ -115,9 +115,27 @@ Future<void> _handleLogout() async {
             backgroundColor: Colors.white,
             foregroundColor: Colors.black,
             centerTitle: false,
-            title: const Text(
-              'Mess Manager',
-              style: TextStyle(fontWeight: FontWeight.w900, fontSize: 24, letterSpacing: -0.5),
+            title: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Mess Manager',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w900, 
+                    fontSize: 20, 
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                Text(
+                  widget.controller.firebaseService.currentUser?.email ?? 'Not Signed In',
+                  style: TextStyle(
+                    fontSize: 12, 
+                    fontWeight: FontWeight.w500, 
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+              ],
             ),
             actions: [
               if (isSuperUser)
