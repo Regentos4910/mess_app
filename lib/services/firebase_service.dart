@@ -131,20 +131,39 @@ class FirebaseService {
 
 Future<void> signOut() async {
     try {
+      // 1. Clear Firestore persistence to kill any active listeners/cache
+      // This prevents 'Permission Denied' loops after the UID becomes null
+      if (_firestore != null) {
+        await _firestore!.terminate();
+        await _firestore!.clearPersistence();
+        // Re-enable it for the next user who might log in
+        _firestore = FirebaseFirestore.instance; 
+      }
+      
+      // 2. Perform actual Auth sign out
       await _auth?.signOut();
+      
+      // 3. Reset local status
+      _backendConfigured = false;
+      _statusMessage = 'Firebase ready. Please sign in.';
+      
     } catch (e) {
       debugPrint('Error during sign out: $e');
       rethrow;
     }
-  }
+ }
 
 Stream<String> userRoleStream(String uid) {
-  return _firestore!
-      .collection('users')
-      .doc(uid)
-      .snapshots()
-      .map((doc) => doc.data()?['role'] as String? ?? 'employee');
-}
+    return _firestore!
+        .collection('users')
+        .doc(uid)
+        .snapshots()
+        .map((doc) => doc.data()?['role'] as String? ?? 'employee')
+        .handleError((error) {
+          debugPrint('Stream error (likely sign-out): $error');
+          return 'employee'; // Fallback value on error
+        });
+  }
 
   // Add this method to handle the first-time check
 Future<void> ensureUserExists(User user) async {
@@ -179,6 +198,16 @@ Future<String> getUserRole(String uid) async {
         persistenceEnabled: true,
         cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
       );
+
+      // Re-apply settings in case firestore was terminated during a previous logout
+      try {
+        _firestore!.settings = const Settings(
+          persistenceEnabled: true,
+          cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
+        );
+      } catch (e) {
+        // Settings can only be set once per instance; ignore if already set
+      }
       
       if (_auth!.currentUser != null) {
         _backendConfigured = true;

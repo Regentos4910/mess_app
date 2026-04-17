@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:mess_app/screens/login_screen.dart';
-
+import 'package:flutter/services.dart';
 import '../models/attendance.dart';
 import '../models/student.dart';
 import '../services/app_controller.dart';
@@ -36,7 +36,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.dispose();
   }
 
-Future<void> _handleLogout() async {
+  // Add this method
+  Future<void> _copySupportEmail() async {
+    await Clipboard.setData(const ClipboardData(text: 'thebeyondev@gmail.com'));
+    HapticFeedback.lightImpact(); // Provides physical feedback
+    
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Email copied to clipboard'),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+
+  Future<void> _handleLogout() async {
     final bool? confirm = await showDialog<bool>(
       context: context,
       builder: (BuildContext context) => AlertDialog(
@@ -105,7 +121,6 @@ Future<void> _handleLogout() async {
 
         final List<Student> filteredStudents = widget.controller
             .searchStudents(_searchQuery)
-            .take(isAdmin ? 10 : 5)
             .toList();
 
         return Scaffold(
@@ -123,64 +138,47 @@ Future<void> _handleLogout() async {
                   'Mess Manager',
                   style: TextStyle(
                     fontWeight: FontWeight.w900, 
-                    fontSize: 20, 
+                    fontSize: 24, 
                     letterSpacing: -0.5,
                   ),
                 ),
                 Text(
                   widget.controller.firebaseService.currentUser?.email ?? 'Not Signed In',
                   style: TextStyle(
-                    fontSize: 12, 
-                    fontWeight: FontWeight.w500, 
+                    fontSize: 10, 
+                    fontWeight: FontWeight.w300, 
                     color: Colors.grey.shade600,
                   ),
                 ),
               ],
             ),
             actions: [
-              if (isSuperUser)
-                IconButton(
-                  onPressed: () => Navigator.of(context).pushNamed('/export-data'),
-                  icon: const Icon(
-                    Icons.description_rounded, // Use the spreadsheet-style icon
-                    color: Colors.green,
-                  ),
-                  tooltip: 'Export Data',
-                ),
-              // Updated Sync/Refresh Button
-              IconButton(
-                onPressed: widget.controller.busy
-                    ? null // Disable while refresh is in progress
-                    : () async {
-                        await widget.controller.refresh();
-                        if (mounted) {
-                          // ignore: use_build_context_synchronously
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Data refreshed'),
-                              duration: Duration(seconds: 1),
-                            ),
-                          );
-                        }
-                      },
-                icon: widget.controller.busy
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.blueAccent),
-                      )
-                    : Icon(
-                        stats.pendingSync > 0
-                            ? Icons.sync_problem_rounded
-                            : Icons.refresh_rounded,
-                        color: stats.pendingSync > 0 ? Colors.redAccent : Colors.blueAccent,
+              GestureDetector(
+                onLongPress: _copySupportEmail, // Trigging the copy on long press
+                behavior: HitTestBehavior.opaque,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      'Developed by Beyondev',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade700,
                       ),
+                    ),
+                    Text(
+                      'thebeyondev@gmail.com',
+                      style: TextStyle(
+                        fontSize: 9,
+                        color: Colors.blueAccent.shade700,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              IconButton(
-                onPressed: _handleLogout,
-                icon: const Icon(Icons.logout_rounded, color: Colors.orangeAccent),
-              ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 12),
             ],
           ),
           body: CustomScrollView(
@@ -190,7 +188,7 @@ Future<void> _handleLogout() async {
                   padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
                   child: Column(
                     children: [
-                      _buildMealSelectorRow(),
+                      _buildMealSelectorRowWithButtons(isSuperUser, stats),
                       const SizedBox(height: 16),
                       // ONLY SHOW STATS TO ADMIN
                       if (isAdmin) _buildCompactStats(stats),
@@ -264,8 +262,10 @@ Future<void> _handleLogout() async {
                         childCount: filteredStudents.length,
                       ),
                     ),
-              
-              const SliverToBoxAdapter(child: SizedBox(height: 100)),
+              // 5. Bottom spacing
+              const SliverToBoxAdapter(
+                child: SizedBox(height: 40),
+              ),
             ],
           ),
         );
@@ -273,23 +273,114 @@ Future<void> _handleLogout() async {
     );
   }
 
-  Widget _buildMealSelectorRow() {
-    final List<String> mealLabels = ['Breakfast', 'Lunch', 'Dinner'];
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      decoration: BoxDecoration(
+  Widget _buildMealSelectorRowWithButtons(bool isSuperUser, DashboardStats stats) {
+    return Row(
+      children: [
+        // Meal Selector Dropdown
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<MealType>(
+                value: widget.controller.selectedMeal,
+                icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.blueAccent),
+                style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 16),
+                items: ['Breakfast', 'Lunch', 'Dinner']
+                    .asMap()
+                    .entries
+                    .map((entry) => DropdownMenuItem(
+                          value: MealType.values[entry.key],
+                          child: Text(entry.value),
+                        ))
+                    .toList(),
+                onChanged: (val) {
+                  if (val != null) widget.controller.setSelectedMeal(val);
+                },
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        // Export Data Button (SuperUser only)
+        if (isSuperUser)
+          _buildActionButton(
+            icon: Icons.description_rounded,
+            color: Colors.green,
+            onPressed: () => Navigator.of(context).pushNamed('/export-data'),
+            tooltip: 'Export Data',
+          ),
+        if (isSuperUser) const SizedBox(width: 8),
+        // Sync/Refresh Button
+        _buildActionButton(
+          icon: widget.controller.busy
+              ? null
+              : (stats.pendingSync > 0
+                  ? Icons.sync_problem_rounded
+                  : Icons.refresh_rounded),
+          color: stats.pendingSync > 0 ? Colors.redAccent : Colors.blueAccent,
+          onPressed: widget.controller.busy
+              ? null
+              : () async {
+                  await widget.controller.refresh();
+                  if (mounted) {
+                    // ignore: use_build_context_synchronously
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Data refreshed'),
+                        duration: Duration(seconds: 1),
+                      ),
+                    );
+                  }
+                },
+          tooltip: 'Refresh',
+          isLoading: widget.controller.busy,
+        ),
+        const SizedBox(width: 8),
+        // Logout Button
+        _buildActionButton(
+          icon: Icons.logout_rounded,
+          color: Colors.orangeAccent,
+          onPressed: _handleLogout,
+          tooltip: 'Logout',
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActionButton({
+    IconData? icon,
+    required Color color,
+    required VoidCallback? onPressed,
+    required String tooltip,
+    bool isLoading = false,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
         color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(40), // Circular borders
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<MealType>(
-          value: widget.controller.selectedMeal,
-          icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.blueAccent),
-          style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 16),
-          items: MealType.values.map((m) => DropdownMenuItem(value: m, child: Text(mealLabels[m.index]))).toList(),
-          onChanged: (val) {
-            if (val != null) widget.controller.setSelectedMeal(val);
-          },
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            width: 48,
+            height: 48,
+            alignment: Alignment.center,
+            child: isLoading
+                ? SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: color,
+                    ),
+                  )
+                : Icon(icon, color: color, size: 22),
+          ),
         ),
       ),
     );
@@ -327,7 +418,7 @@ Future<void> _handleLogout() async {
         fillColor: Colors.grey.shade50,
         contentPadding: const EdgeInsets.symmetric(vertical: 0),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(40), // Circular borders
+          borderRadius: BorderRadius.circular(40),
           borderSide: BorderSide(color: Colors.grey.shade200),
         ),
         enabledBorder: OutlineInputBorder(
@@ -346,22 +437,22 @@ Future<void> _handleLogout() async {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         tileColor: Colors.grey.shade50,
         leading: ClipRRect(
-  borderRadius: BorderRadius.circular(25),
-  child: SizedBox(
-    width: 50,
-    height: 50,
-    child: student.photoPath.isNotEmpty && File(student.photoPath).existsSync()
-        ? Image.file(File(student.photoPath), fit: BoxFit.cover)
-        : (student.photoUrl.isNotEmpty 
-            ? CachedNetworkImage(
-                imageUrl: student.photoUrl,
-                placeholder: (context, url) => Container(color: Colors.grey.shade200),
-                errorWidget: (context, url, error) => const Icon(Icons.person),
-                fit: BoxFit.cover,
-              )
-            : const Icon(Icons.person, color: Colors.blueAccent)),
-  ),
-),
+          borderRadius: BorderRadius.circular(25),
+          child: SizedBox(
+            width: 50,
+            height: 50,
+            child: student.photoPath.isNotEmpty && File(student.photoPath).existsSync()
+                ? Image.file(File(student.photoPath), fit: BoxFit.cover)
+                : (student.photoUrl.isNotEmpty 
+                    ? CachedNetworkImage(
+                        imageUrl: student.photoUrl,
+                        placeholder: (context, url) => Container(color: Colors.grey.shade200),
+                        errorWidget: (context, url, error) => const Icon(Icons.person),
+                        fit: BoxFit.cover,
+                      )
+                    : const Icon(Icons.person, color: Colors.blueAccent)),
+          ),
+        ),
         title: Text(student.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
         subtitle: Text(student.prn, style: const TextStyle(fontSize: 12)),
         trailing: Icon(

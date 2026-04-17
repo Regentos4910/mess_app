@@ -1,5 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // Required for Clipboard
+import 'package:url_launcher/url_launcher.dart'; 
 import '../services/app_controller.dart';
 import 'dashboard_screen.dart';
 
@@ -23,11 +25,54 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscurePassword = true;
   bool _isLoading = false;
 
+  // Constants
+  final String _supportEmail = 'thebeyondev@gmail.com';
+
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  // Logic for Long Press Copy
+  Future<void> _copyEmail() async {
+    await Clipboard.setData(ClipboardData(text: _supportEmail));
+    HapticFeedback.lightImpact(); // Subtle vibration feedback
+    
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Email copied to clipboard'),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+
+  // Helper to launch email
+  Future<void> _sendEmail() async {
+    final Uri emailLaunchUri = Uri(
+      scheme: 'mailto',
+      path: _supportEmail,
+      queryParameters: {
+        'subject': 'Inquiry: Mess Manager Account/Demo',
+      },
+    );
+
+    try {
+      if (await canLaunchUrl(emailLaunchUri)) {
+        await launchUrl(emailLaunchUri);
+      } else {
+        throw 'Could not launch $emailLaunchUri';
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open email app')),
+      );
+    }
   }
 
   Future<void> _handleLogin() async {
@@ -42,11 +87,7 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (userCredential?.user != null) {
-        // 1. Ensure the user document exists in Firestore
         await widget.controller.firebaseService.ensureUserExists(userCredential!.user!);
-        
-        // 2. IMPORTANT: Force the controller to re-run initialization logic 
-        // to pick up the new user's role and start the listener
         await widget.controller.initialize(); 
       }
 
@@ -76,7 +117,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white, // Pure white background
+      backgroundColor: Colors.white,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -87,15 +128,32 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: <Widget>[
-                  // 1. Vibrant Minimal Icon
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.blueAccent.withAlpha(25),
-                      shape: BoxShape.circle,
+                  // --- Branding Section ---
+                  Hero(
+                    tag: 'app_logo',
+                    child: Container(
+                      height: 120,
+                      width: 120,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.05),
+                            blurRadius: 20,
+                            offset: const Offset(0, 10),
+                          ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(60),
+                        child: Image.asset(
+                          'assets/appLogo.jpg',
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => 
+                            const Icon(Icons.restaurant_rounded, size: 60, color: Colors.blueAccent),
+                        ),
+                      ),
                     ),
-                    child: const Icon(Icons.restaurant_rounded, 
-                      size: 60, color: Colors.blueAccent),
                   ),
                   const SizedBox(height: 24),
 
@@ -103,32 +161,33 @@ class _LoginScreenState extends State<LoginScreen> {
                     'Mess Manager',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      fontSize: 28,
+                      fontSize: 32,
                       fontWeight: FontWeight.w900,
-                      letterSpacing: -1,
-                      color: Colors.black,
+                      letterSpacing: -1.2,
+                      color: Color(0xFF1A1A1A),
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  const Text(
+                  const SizedBox(height: 4),
+                  Text(
                     'Staff Secure Access',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: Colors.grey,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
+                      color: Colors.grey.shade600,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
                     ),
                   ),
                   const SizedBox(height: 48),
 
-                  // 2. Styled Rounded Inputs
+                  // --- Input Section ---
                   _buildRoundedField(
                     controller: _emailController,
                     hint: 'Staff Email',
-                    icon: Icons.email_outlined,
+                    icon: Icons.alternate_email_rounded,
                     type: TextInputType.emailAddress,
                     validator: (v) => (v == null || !v.contains('@')) 
-                        ? 'Enter valid email' : null,
+                        ? 'Enter a valid staff email' : null,
                   ),
                   const SizedBox(height: 16),
 
@@ -141,73 +200,119 @@ class _LoginScreenState extends State<LoginScreen> {
                       icon: Icon(_obscurePassword 
                           ? Icons.visibility_off_rounded 
                           : Icons.visibility_rounded, 
-                          size: 20, color: Colors.grey),
+                          size: 20, color: Colors.blueAccent.withOpacity(0.5)),
                       onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                     ),
                     validator: (v) => (v == null || v.length < 6) 
-                        ? 'Password too short' : null,
+                        ? 'Password must be at least 6 characters' : null,
                   ),
                   const SizedBox(height: 32),
 
-                  // 3. Vibrant Sign In Button
+                  // --- Action Button ---
                   SizedBox(
                     width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _isLoading ? null : _handleLogin,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blueAccent,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 18),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(40),
-                        ),
-                        elevation: 0,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.blueAccent.withOpacity(0.3),
+                            blurRadius: 15,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
                       ),
-                      child: _isLoading
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2.5,
+                      child: ElevatedButton(
+                        onPressed: _isLoading ? null : _handleLogin,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blueAccent,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 20),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          elevation: 0,
+                        ),
+                        child: _isLoading
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2.5,
+                                ),
+                              )
+                            : const Text(
+                                'SIGN IN',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 1.5,
+                                ),
                               ),
-                            )
-                          : const Text(
-                              'SIGN IN',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 1,
-                              ),
-                            ),
+                      ),
                     ),
                   ),
 
                   const SizedBox(height: 40),
 
-                  // 4. Subtle Cloud Indicator
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade50,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.cloud_done_rounded, 
-                          size: 14, color: Colors.blueAccent),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Encrypted Cloud Link',
-                          style: TextStyle(
-                            color: Colors.blueAccent.shade700, 
-                            fontSize: 12, 
-                            fontWeight: FontWeight.w700,
+                  // --- Beyondev Branding Footer ---
+                  Column(
+                    children: [
+                      Text(
+                        'Developed by Beyondev',
+                        style: TextStyle(
+                          color: Colors.grey.shade800,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      // WRAPPED IN GESTUREDETECTOR FOR LONG PRESS
+                      GestureDetector(
+                        onTap: _sendEmail,
+                        onLongPress: _copyEmail, // ADDED LONG PRESS
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.blueAccent.withOpacity(0.05),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Column(
+                            children: [
+                              Text(
+                                'Mail us at for account or demo:',
+                                style: TextStyle(
+                                  color: Colors.grey.shade600,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                _supportEmail,
+                                style: TextStyle(
+                                  color: Colors.blueAccent.shade700,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  decoration: TextDecoration.underline,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        '“Beyondev, We Tech up your Business.”',
+                        style: TextStyle(
+                          color: Colors.grey.shade400,
+                          fontSize: 11,
+                          fontStyle: FontStyle.italic,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -233,21 +338,30 @@ class _LoginScreenState extends State<LoginScreen> {
       keyboardType: type,
       enabled: !_isLoading,
       validator: validator,
-      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.black87),
       decoration: InputDecoration(
         hintText: hint,
+        hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
         prefixIcon: Icon(icon, size: 20, color: Colors.blueAccent),
         suffixIcon: suffix,
         filled: true,
         fillColor: Colors.grey.shade50,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(40),
-          borderSide: BorderSide.none,
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: Colors.grey.shade100),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(40),
-          borderSide: BorderSide.none,
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: Colors.grey.shade100),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: Colors.blueAccent, width: 1.5),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: Colors.redAccent, width: 1),
         ),
       ),
     );

@@ -28,6 +28,7 @@ environment:
 # the latest version available on pub.dev. To see which dependencies have newer
 # versions available, run `flutter pub outdated`.
 dependencies:
+  url_launcher: ^6.3.0
   flutter:
     sdk: flutter
   firebase_core: ^4.6.0
@@ -115,5 +116,5 @@ dependency_overrides:
 flutter_launcher_icons:
   android: "launcher_icon"
   ios: true
-  image_path: "assets/applogo.png"
+  image_path: "assets/applogo.jpg"
   min_sdk_android: 21 # bottom-line compatibility

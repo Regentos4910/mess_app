@@ -11,7 +11,6 @@ import 'screens/scan_screen.dart';
 import 'screens/splash_screen.dart';
 import 'screens/student_profile_screen.dart';
 import 'services/app_controller.dart';
-
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
